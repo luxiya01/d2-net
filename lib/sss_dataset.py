@@ -2,7 +2,9 @@
 
 import os
 import numpy as np
+import torch
 from torch.utils.data import Dataset
+from lib.utils import preprocess_image
 from sss_data_processing.src.correspondence_getter import CorrespondenceGetter
 
 
@@ -12,6 +14,7 @@ class SSSDataset(Dataset):
                  data_dir,
                  data_indices_file,
                  remove_trivial_pairs,
+                 preprocessing='torch',
                  img_type='norm_intensity',
                  min_overlap=.3):
         """
@@ -29,6 +32,7 @@ class SSSDataset(Dataset):
         self.data_dir = data_dir
         self.patches_dir = os.path.join(self.data_dir, 'patches')
         self.img_type = img_type
+        self.preprocessing = preprocessing
         self.correspondence_getter = CorrespondenceGetter(
             self.data_dir, data_indices_file)
         self.overlapping_pairs = self.correspondence_getter.get_all_pairs_with_target_overlap(
@@ -59,13 +63,17 @@ class SSSDataset(Dataset):
 
     def __getitem__(self, pair_idx):
         idx1, idx2 = self.overlapping_pairs[pair_idx]
+        image1 = preprocess_image(self._load_image(idx1),
+                                  preprocessing=self.preprocessing)
+        image2 = preprocess_image(self._load_image(idx2),
+                                  preprocessing=self.preprocessing)
         pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
             idx1, idx2)
         return {
-            'image1': self._load_image(idx1),
-            'image2': self._load_image(idx2),
+            'image1': torch.from_numpy(image1.astype(np.float32)),
+            'image2': torch.from_numpy(image2.astype(np.float32)),
             'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2],
-            'pos': pos,
-            'corr1': corr1,
-            'corr2': corr2
+            'pos': torch.from_numpy(pos.astype(np.float32)),
+            'corr1': torch.from_numpy(corr1.astype(np.float32)),
+            'corr2': torch.from_numpy(corr2.astype(np.float32))
         }
