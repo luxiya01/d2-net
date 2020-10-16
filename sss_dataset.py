@@ -3,7 +3,7 @@
 import os
 import numpy as np
 from torch.utils.data import Dataset
-import sss_data_processing.src as dataproc
+from sss_data_processing.src.correspondence_getter import CorrespondenceGetter
 
 
 class SSSDataset(Dataset):
@@ -11,7 +11,7 @@ class SSSDataset(Dataset):
     def __init__(self,
                  data_dir,
                  data_indices_file,
-                 img_type='normalised',
+                 img_type='norm_intensity',
                  min_overlap=.3,
                  remove_trivial_pairs=False):
         """
@@ -29,7 +29,7 @@ class SSSDataset(Dataset):
         self.data_dir = data_dir
         self.patches_dir = os.path.join(self.data_dir, 'patches')
         self.img_type = img_type
-        self.correspondence_getter = dataproc.correspondence_getter.CorrespondenceGetter(
+        self.correspondence_getter = CorrespondenceGetter(
             self.data_dir, data_indices_file)
         self.overlapping_pairs = self.correspondence_getter.get_all_pairs_with_target_overlap(
             min_overlap=min_overlap,
@@ -37,8 +37,8 @@ class SSSDataset(Dataset):
             remove_trivial_pairs=remove_trivial_pairs)
 
     def _load_image(self, idx):
-        """Given a patch index, load the correponding img_type (normalised or
-        unnormalised), scale up intensities to (0, 255) and convert from
+        """Given a patch index, load the correponding img_type (norm_intensity or
+        unnorm_intensity), scale up intensities to (0, 255) and convert from
         grayscale to rgb."""
         patch_name = '.'.join([str(idx), 'npz'])
         image = np.load(os.path.join(self.patches_dir,
