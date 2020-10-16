@@ -1,0 +1,3 @@
+[submodule "sss_data_processing"]
+	path = sss_data_processing
+	url = git@github.com:luxiya01/exjobb-cnn-sss.git
