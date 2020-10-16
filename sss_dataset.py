@@ -11,9 +11,9 @@ class SSSDataset(Dataset):
     def __init__(self,
                  data_dir,
                  data_indices_file,
+                 remove_trivial_pairs,
                  img_type='norm_intensity',
-                 min_overlap=.3,
-                 remove_trivial_pairs=False):
+                 min_overlap=.3):
         """
         Args:
             - data_dir: path to the sss patch data
@@ -59,8 +59,13 @@ class SSSDataset(Dataset):
 
     def __getitem__(self, pair_idx):
         idx1, idx2 = self.overlapping_pairs[pair_idx]
+        pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
+            idx1, idx2)
         return {
             'image1': self._load_image(idx1),
             'image2': self._load_image(idx2),
-            'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2]
+            'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2],
+            'pos': pos,
+            'corr1': corr1,
+            'corr2': corr2
         }
