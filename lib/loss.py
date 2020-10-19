@@ -142,9 +142,11 @@ def loss_function(model,
                        cmap='Reds')
             plt.axis('off')
             savefig(
-                'train_vis/%s.%02d.%02d.%d.png' %
+                'train_vis/%s.%02d.%02d.%d.%d.%d.overlap_%02d.png' %
                 ('train' if batch['train'] else 'valid', batch['epoch_idx'],
-                 batch['batch_idx'] // batch['log_interval'], idx_in_batch),
+                 batch['batch_idx'] // batch['log_interval'], idx_in_batch,
+                 batch['idx1'][idx_in_batch], batch['idx2'][idx_in_batch],
+                 batch['overlap'][idx_in_batch] * 100),
                 dpi=300)
             plt.close()
 

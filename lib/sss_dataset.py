@@ -74,6 +74,8 @@ class SSSDataset(Dataset):
         pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
             idx1, idx2)
         return {
+            'idx1': idx1,
+            'idx2': idx2,
             'image1': torch.from_numpy(image1.astype(np.float32)),
             'image2': torch.from_numpy(image2.astype(np.float32)),
             'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2],
