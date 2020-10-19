@@ -9,7 +9,8 @@ from sss_data_processing.src.correspondence_getter import CorrespondenceGetter
 
 
 class SSSDataset(Dataset):
-    """Side scan sonar image patches dataset"""
+    """Side scan sonar image patches dataset. Correspondences are given in numpy
+    convention (x-axis pointing downwards, y-axis pointing to the right.)"""
     def __init__(self,
                  data_dir,
                  data_indices_file,
@@ -62,6 +63,9 @@ class SSSDataset(Dataset):
         return len(self.overlapping_pairs)
 
     def __getitem__(self, pair_idx):
+        """Note that the correspondences are flipped from OpenCV convention
+        given by the CorrespondenceGetter to numpy convention that will be used
+        by the networks"""
         idx1, idx2 = self.overlapping_pairs[pair_idx]
         image1 = preprocess_image(self._load_image(idx1),
                                   preprocessing=self.preprocessing)
@@ -74,6 +78,6 @@ class SSSDataset(Dataset):
             'image2': torch.from_numpy(image2.astype(np.float32)),
             'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2],
             'pos': torch.from_numpy(pos.astype(np.float32)),
-            'corr1': torch.from_numpy(corr1.astype(np.float32)),
-            'corr2': torch.from_numpy(corr2.astype(np.float32))
+            'corr1': torch.from_numpy(corr1[:, [1, 0]].astype(np.float32)),
+            'corr2': torch.from_numpy(corr2[:, [1, 0]].astype(np.float32))
         }
