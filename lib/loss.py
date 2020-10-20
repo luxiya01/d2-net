@@ -21,7 +21,7 @@ def loss_function(model,
                   safe_radius=4,
                   scaling_steps=3,
                   min_num_corr=128,
-                  max_num_corr=500,
+                  max_num_corr=1000,
                   plot=False):
     output = model({
         'image1': batch['image1'].to(device),
@@ -105,50 +105,19 @@ def loss_function(model,
         n_valid_samples += 1
 
         if plot and batch['batch_idx'] % batch['log_interval'] == 0:
-            pos1_aux = pos1.cpu().numpy()
-            pos2_aux = pos2.cpu().numpy()
-            k = pos1_aux.shape[1]
-            col = np.random.rand(k, 3)
-            n_sp = 4
-            plt.figure()
-            plt.subplot(1, n_sp, 1)
-            im1 = imshow_image(batch['image1'][idx_in_batch].cpu().numpy(),
-                               preprocessing=batch['preprocessing'])
-            plt.imshow(im1)
-            plt.scatter(pos1_aux[1, :],
-                        pos1_aux[0, :],
-                        s=0.25**2,
-                        c=col,
-                        marker=',',
-                        alpha=0.5)
-            plt.axis('off')
-            plt.subplot(1, n_sp, 2)
-            plt.imshow(output['scores1'][idx_in_batch].data.cpu().numpy(),
-                       cmap='Reds')
-            plt.axis('off')
-            plt.subplot(1, n_sp, 3)
-            im2 = imshow_image(batch['image2'][idx_in_batch].cpu().numpy(),
-                               preprocessing=batch['preprocessing'])
-            plt.imshow(im2)
-            plt.scatter(pos2_aux[1, :],
-                        pos2_aux[0, :],
-                        s=0.25**2,
-                        c=col,
-                        marker=',',
-                        alpha=0.5)
-            plt.axis('off')
-            plt.subplot(1, n_sp, 4)
-            plt.imshow(output['scores2'][idx_in_batch].data.cpu().numpy(),
-                       cmap='Reds')
-            plt.axis('off')
-            savefig(
-                'train_vis/%s.%02d.%02d.%d.%d.%d.overlap_%02d.png' %
-                ('train' if batch['train'] else 'valid', batch['epoch_idx'],
-                 batch['batch_idx'] // batch['log_interval'], idx_in_batch,
-                 batch['idx1'][idx_in_batch], batch['idx2'][idx_in_batch],
-                 batch['overlap'][idx_in_batch] * 100),
-                dpi=300)
-            plt.close()
+            #TODO: remove one of these - only one of them is correct...
+            plot_network_res(pos1,
+                             pos2,
+                             batch,
+                             idx_in_batch,
+                             output,
+                             flip_xy=True)
+            plot_network_res(pos1,
+                             pos2,
+                             batch,
+                             idx_in_batch,
+                             output,
+                             flip_xy=False)
 
     if not has_grad:
         raise NoGradientError
@@ -156,6 +125,67 @@ def loss_function(model,
     loss = loss / n_valid_samples
 
     return loss
+
+
+def plot_network_res(pos1, pos2, batch, idx_in_batch, output, flip_xy):
+    pos1_aux = pos1.cpu().numpy()
+    pos2_aux = pos2.cpu().numpy()
+    k = pos1_aux.shape[1]
+    col = np.random.rand(k, 3)
+    n_sp = 4
+    plt.figure()
+    plt.subplot(1, n_sp, 1)
+    im1 = imshow_image(batch['image1'][idx_in_batch].cpu().numpy(),
+                       preprocessing=batch['preprocessing'])
+    plt.imshow(im1)
+
+    if flip_xy:
+        plt.scatter(pos1_aux[1, :],
+                    pos1_aux[0, :],
+                    s=0.25**2,
+                    c=col,
+                    marker=',',
+                    alpha=0.5)
+    else:
+        plt.scatter(pos1_aux[0, :],
+                    pos1_aux[1, :],
+                    s=0.25**2,
+                    c=col,
+                    marker=',',
+                    alpha=0.5)
+    plt.axis('off')
+    plt.subplot(1, n_sp, 2)
+    plt.imshow(output['scores1'][idx_in_batch].data.cpu().numpy(), cmap='Reds')
+    plt.axis('off')
+    plt.subplot(1, n_sp, 3)
+    im2 = imshow_image(batch['image2'][idx_in_batch].cpu().numpy(),
+                       preprocessing=batch['preprocessing'])
+    plt.imshow(im2)
+    if flip_xy:
+        plt.scatter(pos2_aux[1, :],
+                    pos2_aux[0, :],
+                    s=0.25**2,
+                    c=col,
+                    marker=',',
+                    alpha=0.5)
+    else:
+        plt.scatter(pos2_aux[0, :],
+                    pos2_aux[1, :],
+                    s=0.25**2,
+                    c=col,
+                    marker=',',
+                    alpha=0.5)
+    plt.axis('off')
+    plt.subplot(1, n_sp, 4)
+    plt.imshow(output['scores2'][idx_in_batch].data.cpu().numpy(), cmap='Reds')
+    plt.axis('off')
+    savefig('train_vis/%s.%02d.%02d.%d.%d.%d.overlap_%02d_flipxy_%s.png' %
+            ('train' if batch['train'] else 'valid', batch['epoch_idx'],
+             batch['batch_idx'] // batch['log_interval'], idx_in_batch,
+             batch['idx1'][idx_in_batch], batch['idx2'][idx_in_batch],
+             batch['overlap'][idx_in_batch] * 100, str(flip_xy)),
+            dpi=300)
+    plt.close()
 
 
 def fmap_pos_to_idx(fmap_pos, w):
