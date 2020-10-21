@@ -15,7 +15,7 @@ class SSSDataset(Dataset):
                  data_dir,
                  data_indices_file,
                  remove_trivial_pairs,
-                 pos_round_decimals,
+                 pos_round_to,
                  preprocessing='torch',
                  img_type='norm_intensity',
                  min_overlap=.3):
@@ -28,8 +28,9 @@ class SSSDataset(Dataset):
             - remove_trivial_pairs: if True, trivial overlapping pair of images
               (patches cropped out from overlapping regions of the same sss
               image) are removed from the dataset
-            - pos_round_decimals: the decimals that the physical positions will be rounded to
-              (e.g. 0 = round to closest integer, 1 = round to first decimal place)
+            - pos_round_to: the decimals that the physical positions will be rounded to
+              (e.g. 1 = round to closest integer, 2 = round to closest .5, 10 =
+              round to closest .1)
             - min_overlap: minimum amount of overlap required to be considered
               as an overlapping image pair
         """
@@ -38,7 +39,7 @@ class SSSDataset(Dataset):
         self.img_type = img_type
         self.preprocessing = preprocessing
         self.correspondence_getter = CorrespondenceGetter(
-            self.data_dir, pos_round_decimals, data_indices_file)
+            self.data_dir, pos_round_to, data_indices_file)
         self.overlapping_pairs = self.correspondence_getter.get_all_pairs_with_target_overlap(
             min_overlap=min_overlap,
             max_overlap=.99,
