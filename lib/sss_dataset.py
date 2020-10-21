@@ -2,6 +2,7 @@
 
 import os
 import numpy as np
+import random
 import torch
 from torch.utils.data import Dataset
 from lib.utils import preprocess_image
@@ -16,6 +17,7 @@ class SSSDataset(Dataset):
                  data_indices_file,
                  remove_trivial_pairs,
                  pos_round_to,
+                 max_num_corr=1000,
                  preprocessing='torch',
                  img_type='norm_intensity',
                  min_overlap=.3):
@@ -31,6 +33,8 @@ class SSSDataset(Dataset):
             - pos_round_to: the decimals that the physical positions will be rounded to
               (e.g. 1 = round to closest integer, 2 = round to closest .5, 10 =
               round to closest .1)
+            - max_num_corr: max pairs of correspondences given for a pair of
+              images
             - min_overlap: minimum amount of overlap required to be considered
               as an overlapping image pair
         """
@@ -44,6 +48,7 @@ class SSSDataset(Dataset):
             min_overlap=min_overlap,
             max_overlap=.99,
             remove_trivial_pairs=remove_trivial_pairs)
+        self.max_num_corr = max_num_corr
 
     def _load_image(self, idx):
         """Given a patch index, load the correponding img_type (norm_intensity or
@@ -75,8 +80,23 @@ class SSSDataset(Dataset):
                                   preprocessing=self.preprocessing)
         image2 = preprocess_image(self._load_image(idx2),
                                   preprocessing=self.preprocessing)
+
+        # Get correspondences in OpenCV convention (shape: [num_corr, 2])
         pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
             idx1, idx2)
+        num_corr = corr1.shape[0]
+
+        # Select corresopndences
+        if num_corr <= self.max_num_corr:
+            idx = range(num_corr)
+        else:
+            idx = random.sample(range(num_corr), k=self.max_num_corr)
+        pos, corr1, corr2 = pos[idx], corr1[idx], corr2[idx]
+
+        # Convert from OpenCV convention to Numpy convention
+        corr1 = corr1[:, [1, 0]]
+        corr2 = corr2[:, [1, 0]]
+
         return {
             'idx1': idx1,
             'idx2': idx2,
@@ -84,6 +104,6 @@ class SSSDataset(Dataset):
             'image2': torch.from_numpy(image2.astype(np.float32)),
             'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2],
             'pos': torch.from_numpy(pos.astype(np.float32)),
-            'corr1': torch.from_numpy(corr1[:, [1, 0]].astype(np.float32)),
-            'corr2': torch.from_numpy(corr2[:, [1, 0]].astype(np.float32))
+            'corr1': torch.from_numpy(corr1.astype(np.float32)),
+            'corr2': torch.from_numpy(corr2.astype(np.float32))
         }

@@ -21,7 +21,6 @@ def loss_function(model,
                   safe_radius=4,
                   scaling_steps=3,
                   min_num_corr=128,
-                  max_num_corr=1000,
                   plot=False):
     output = model({
         'image1': batch['image1'].to(device),
@@ -54,13 +53,10 @@ def loss_function(model,
         # Skip the pair if not enough GT correspondences are available
         if num_corr < min_num_corr:
             continue
-        if num_corr <= max_num_corr:
-            idx = range(num_corr)
-        else:
-            idx = random.sample(range(num_corr), k=max_num_corr)
-        pos1 = corr1[idx].T
+
+        pos1 = corr1.T
         fmap_pos1 = downscale_positions(pos1, scaling_steps).round().int()
-        pos2 = corr2[idx].T
+        pos2 = corr2.T
         fmap_pos2 = downscale_positions(pos2, scaling_steps).round().int()
 
         # Descriptors at the corresponding positions
