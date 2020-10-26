@@ -1,13 +1,17 @@
 import numpy as np
 
+import cv2
 import os
 
 import shutil
+
+import matplotlib.pyplot as plt
 
 import torch
 import torch.optim as optim
 
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 
@@ -30,16 +34,10 @@ if use_cuda:
 np.random.seed(1)
 
 args = parse_args.get_args()
-
 print(args)
 
-# Create the folders for plotting if need be
-if args.plot:
-    plot_path = 'train_vis'
-    if os.path.isdir(plot_path):
-        print('[Warning] Plotting directory already exists.')
-    else:
-        os.mkdir(plot_path)
+# Create writer for logging to tensorboard
+writer = SummaryWriter(args.log_dir)
 
 # Creating CNN model
 model = D2Net(model_file=args.model_file, use_cuda=use_cuda)
@@ -49,16 +47,17 @@ optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                        lr=args.lr)
 
 # Dataset
-training_dataset = SSSDataset(
-    data_dir=args.data_dir,
-    data_indices_file=args.data_indices_file,
-    remove_trivial_pairs=args.remove_trivial_pairs,
-    preprocessing=args.preprocessing,
-    img_type=args.img_type,
-    min_overlap=args.min_overlap,
-    max_overlap=args.max_overlap,
-    pos_round_to=args.pos_round_to,
-    plot_gt_correspondence=args.plot_gt_correspondence)
+training_dataset = SSSDataset(data_dir=args.data_dir,
+                              data_indices_file=args.data_indices_file,
+                              remove_trivial_pairs=args.remove_trivial_pairs,
+                              preprocessing=args.preprocessing,
+                              img_type=args.img_type,
+                              min_overlap=args.min_overlap,
+                              max_overlap=args.max_overlap,
+                              max_num_corr=100,
+                              pos_round_to=args.pos_round_to,
+                              plot_gt_correspondence=False,
+                              one_channel=False)
 print(f'Num training data: {len(training_dataset)}')
 if args.use_validation:
     num_validation = max(int(len(training_dataset) * args.validation_size), 1)
@@ -105,7 +104,7 @@ def process_epoch(epoch_idx,
         batch['log_interval'] = args.log_interval
 
         try:
-            loss = loss_function(model, batch, device, plot=args.plot)
+            loss = loss_function(model, batch, device, writer=writer)
         except NoGradientError:
             continue
 
@@ -119,6 +118,12 @@ def process_epoch(epoch_idx,
                            ('train' if train else 'valid', epoch_idx,
                             batch_idx, len(dataloader), np.mean(epoch_losses)))
 
+            # log to tensorboard
+            writer.add_scalar(
+                'average [%s] loss' % ('train' if train else 'valid'),
+                np.mean(epoch_losses),
+                global_step=epoch_idx * len(dataloader) + batch_idx)
+
         if train:
             loss.backward()
             optimizer.step()
@@ -127,6 +132,7 @@ def process_epoch(epoch_idx,
         '[%s] epoch %d - avg_loss: %f\n' %
         ('train' if train else 'valid', epoch_idx, np.mean(epoch_losses)))
     log_file.flush()
+    writer.flush()
 
     return np.mean(epoch_losses)
 
@@ -197,3 +203,4 @@ for epoch_idx in range(1, args.num_epochs + 1):
 
 # Close the log file
 log_file.close()
+writer.close()

@@ -45,15 +45,11 @@ def get_args():
         help=
         'the decimals that the physical positions will be rounded to during correspondence calculation, pos_round_to = 5 -> round to closest 0.2'
     )
-    parser.add_argument(
-        '--plot_gt_correspondence',
-        action='store_true',
-        help='plot groundtruth correspondences used for training')
 
     parser.add_argument('--preprocessing',
                         type=str,
-                        default='torch',
-                        help='image preprocessing (caffe or torch)')
+                        default=None,
+                        help='image preprocessing (None, caffe or torch)')
     parser.add_argument('--model_file',
                         type=str,
                         default='models/d2_tf.pth',
@@ -88,7 +84,6 @@ def get_args():
                         type=int,
                         default=50,
                         help='loss logging interval')
-
     parser.add_argument('--log_file',
                         type=str,
                         default='log.txt',
@@ -97,12 +92,6 @@ def get_args():
                         type=str,
                         required=True,
                         help='logging directory')
-
-    parser.add_argument('--plot',
-                        dest='plot',
-                        action='store_true',
-                        help='plot training pairs')
-    parser.set_defaults(plot=True)
 
     parser.add_argument('--checkpoint_directory',
                         type=str,
