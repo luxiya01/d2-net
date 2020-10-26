@@ -14,7 +14,7 @@ def preprocess_image(image, preprocessing=None):
         pass
     elif preprocessing == 'caffe':
         # RGB -> BGR
-        image = image[:: -1, :, :]
+        image = image[::-1, :, :]
         # Zero-center by mean pixel
         mean = np.array([103.939, 116.779, 123.68])
         image = image - mean.reshape([3, 1, 1])
@@ -35,7 +35,7 @@ def imshow_image(image, preprocessing=None):
         mean = np.array([103.939, 116.779, 123.68])
         image = image + mean.reshape([3, 1, 1])
         # RGB -> BGR
-        image = image[:: -1, :, :]
+        image = image[::-1, :, :]
     elif preprocessing == 'torch':
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
@@ -49,12 +49,9 @@ def imshow_image(image, preprocessing=None):
 
 
 def grid_positions(h, w, device, matrix=False):
-    lines = torch.arange(
-        0, h, device=device
-    ).view(-1, 1).float().repeat(1, w)
-    columns = torch.arange(
-        0, w, device=device
-    ).view(1, -1).float().repeat(h, 1)
+    lines = torch.arange(0, h, device=device).view(-1, 1).float().repeat(1, w)
+    columns = torch.arange(0, w, device=device).view(1,
+                                                     -1).float().repeat(h, 1)
     if matrix:
         return torch.stack([lines, columns], dim=0)
     else:
@@ -100,10 +97,8 @@ def interpolate_dense_features(pos, dense_features, return_corners=False):
     j_bottom_right = torch.ceil(j).long()
     valid_bottom_right = torch.min(i_bottom_right < h, j_bottom_right < w)
 
-    valid_corners = torch.min(
-        torch.min(valid_top_left, valid_top_right),
-        torch.min(valid_bottom_left, valid_bottom_right)
-    )
+    valid_corners = torch.min(torch.min(valid_top_left, valid_top_right),
+                              torch.min(valid_bottom_left, valid_bottom_right))
 
     i_top_left = i_top_left[valid_corners]
     j_top_left = j_top_left[valid_corners]
@@ -135,8 +130,7 @@ def interpolate_dense_features(pos, dense_features, return_corners=False):
         w_top_left * dense_features[:, i_top_left, j_top_left] +
         w_top_right * dense_features[:, i_top_right, j_top_right] +
         w_bottom_left * dense_features[:, i_bottom_left, j_bottom_left] +
-        w_bottom_right * dense_features[:, i_bottom_right, j_bottom_right]
-    )
+        w_bottom_right * dense_features[:, i_bottom_right, j_bottom_right])
 
     pos = torch.cat([i.view(1, -1), j.view(1, -1)], dim=0)
 
@@ -148,7 +142,8 @@ def interpolate_dense_features(pos, dense_features, return_corners=False):
             torch.stack([i_top_right, j_top_right], dim=0),
             torch.stack([i_bottom_left, j_bottom_left], dim=0),
             torch.stack([i_bottom_right, j_bottom_right], dim=0)
-        ], dim=0)
+        ],
+                              dim=0)
         return [descriptors, pos, ids, corners]
 
 
