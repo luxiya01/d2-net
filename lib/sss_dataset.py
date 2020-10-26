@@ -17,6 +17,7 @@ class SSSDataset(Dataset):
                  data_indices_file,
                  remove_trivial_pairs,
                  pos_round_to,
+                 debugging=False,
                  one_channel=True,
                  plot_gt_correspondence=False,
                  max_num_corr=1000,
@@ -47,6 +48,7 @@ class SSSDataset(Dataset):
             - max_overlap: maximum amount of overlap required to be considered
               as an overlapping image pair
         """
+        self.debugging = debugging
         self.data_dir = data_dir
         self.patches_dir = os.path.join(self.data_dir, 'patches')
         self.img_type = img_type
@@ -115,8 +117,14 @@ class SSSDataset(Dataset):
                                   preprocessing=self.preprocessing)
         image2 = preprocess_image(self._load_image(idx2),
                                   preprocessing=self.preprocessing)
-        # Correspondences in OpenCV convention
-        pos, corr1, corr2 = self._sample_correspondences(idx1, idx2)
+        if self.debugging:
+            num_corr = 2
+            pos = np.zeros((num_corr, 2))
+            corr1 = np.array([[0, 0], [0, 1]])
+            corr2 = np.array([[30, 200], [30, 201]])
+        else:
+            # Correspondences in OpenCV convention
+            pos, corr1, corr2 = self._sample_correspondences(idx1, idx2)
 
         if self.plot_gt_correspondence:
             self._plot_correspondences(idx1, idx2, corr1, corr2)

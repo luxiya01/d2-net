@@ -47,7 +47,8 @@ optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                        lr=args.lr)
 
 # Dataset
-training_dataset = SSSDataset(data_dir=args.data_dir,
+training_dataset = SSSDataset(debugging=True,
+                              data_dir=args.data_dir,
                               data_indices_file=args.data_indices_file,
                               remove_trivial_pairs=args.remove_trivial_pairs,
                               preprocessing=args.preprocessing,
