@@ -7,7 +7,6 @@ import cv2
 
 import torch
 import torch.nn.functional as F
-from torchvision.utils import make_grid
 
 from lib.utils import (grid_positions, upscale_positions, downscale_positions,
                        savefig, imshow_image)
@@ -21,7 +20,7 @@ def loss_function(model,
                   device,
                   writer,
                   margin=1,
-                  safe_radius=30,
+                  safe_radius=4,
                   scaling_steps=3,
                   min_num_corr=1):
     output = model({
@@ -110,10 +109,14 @@ def loss_function(model,
             fig = plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2,
                                             output, batch, idx_in_batch,
                                             scaling_steps)
-            writer.add_figure(
-                f'GT correspondences ({idx1}, {idx2}) safe_radius = {safe_radius}',
-                fig,
-                global_step=batch['epoch_idx'])
+            if batch['train']:
+                writer.add_figure(f'train_GT_correspondences_and_fmaps',
+                                  fig,
+                                  global_step=batch['global_step'])
+            else:
+                writer.add_figure(f'valid_GT_correspondences_and_fmaps',
+                                  fig,
+                                  global_step=batch['global_step'])
 
     if not has_grad:
         raise NoGradientError
@@ -136,8 +139,15 @@ def pos_to_matches(pos1_aux, pos2_aux, idx):
     return kp1, kp2, matches
 
 
-def plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2, output, batch,
-                              idx_in_batch, scaling_steps):
+def plot_intermediate_results(pos1,
+                              pos2,
+                              fmap_pos1,
+                              fmap_pos2,
+                              output,
+                              batch,
+                              idx_in_batch,
+                              scaling_steps,
+                              max_num_corr_show=100):
     idx1 = batch['idx1'][idx_in_batch]
     idx2 = batch['idx2'][idx_in_batch]
 
@@ -145,8 +155,8 @@ def plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2, output, batch,
     pos2_aux = pos2.cpu().numpy()
     idx = range(pos1_aux.shape[1])
 
-    fig = plt.figure(figsize=(10, 5), constrained_layout=True)
-    gs = fig.add_gridspec(2, 4)
+    fig = plt.figure(figsize=(15, 5), constrained_layout=True)
+    gs = fig.add_gridspec(2, 6)
     ax_img1 = fig.add_subplot(gs[0, 0])
     img1 = imshow_image(batch['image1'][idx_in_batch].cpu().numpy(),
                         preprocessing=batch['preprocessing'])
@@ -161,7 +171,7 @@ def plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2, output, batch,
     ax_img2.set_title(f'Image2: {idx2}')
     ax_img2.axis('off')
 
-    ax_img_match = fig.add_subplot(gs[0, 2:])
+    ax_img_match = fig.add_subplot(gs[0, 2:4])
     kp1, kp2, matches = pos_to_matches(pos1_aux, pos2_aux, idx)
     img_match = cv2.drawMatches(img1,
                                 kp1,
@@ -175,20 +185,37 @@ def plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2, output, batch,
     ax_img_match.axis('off')
     print(f'img_match range: {img_match.min()}, {img_match.max()}')
 
+    ax_img_match_downsampled = fig.add_subplot(gs[0, 4:])
+    idx_corr_show = random.sample(range(len(matches)),
+                                  min(max_num_corr_show, len(matches)))
+    match_mask = np.zeros_like(matches)
+    match_mask[idx_corr_show] = 1
+    img_match_downsampled = cv2.drawMatches(img1,
+                                            kp1,
+                                            img2,
+                                            kp2,
+                                            matches,
+                                            None,
+                                            matchesMask=match_mask,
+                                            matchColor=(145, 232, 144, .5))
+    ax_img_match_downsampled.imshow(img_match_downsampled)
+    ax_img_match_downsampled.set_title('GT correspondences downsampled')
+    ax_img_match_downsampled.axis('off')
+
     ax_fmap1 = fig.add_subplot(gs[1, 0])
     img_fmap1 = output['scores1'][idx_in_batch].data.cpu().numpy()
     ax_fmap1.imshow(img_fmap1, cmap='Reds')
-    ax_fmap1.set_title(f'Soft detection scores image1: {idx1}')
+    ax_fmap1.set_title(f'Soft detection scores1: {idx1}')
     ax_fmap1.axis('off')
 
     ax_fmap2 = fig.add_subplot(gs[1, 1])
     img_fmap2 = output['scores2'][idx_in_batch].data.cpu().numpy()
     ax_fmap2.imshow(img_fmap2, cmap='Reds')
-    ax_fmap2.set_title(f'Soft detection scores image2: {idx2}')
+    ax_fmap2.set_title(f'Soft detection scores2: {idx2}')
     ax_fmap2.axis('off')
 
     red_cm = matplotlib.cm.get_cmap('Reds')
-    ax_fmap_match = fig.add_subplot(gs[1, 2:])
+    ax_fmap_match = fig.add_subplot(gs[1, 2:4])
     norm_img_fmap1 = (img_fmap1 - img_fmap1.min()) / (img_fmap1.max() -
                                                       img_fmap1.min())
     mapped_img_fmap1 = red_cm(norm_img_fmap1)
@@ -211,11 +238,11 @@ def plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2, output, batch,
         upscale_positions(fmap_pos2, scaling_steps), idx)
     print(
         f'img_fmap1 range: {mapped_img_fmap1.min()}, {mapped_img_fmap1.max()}')
-    img_fmap_match = cv2.drawMatches(cv2.cvtColor(mapped_img_fmap1,
-                                                  cv2.COLOR_RGB2BGR),
+    img1_fmap = cv2.cvtColor(mapped_img_fmap1, cv2.COLOR_RGB2BGR)
+    img2_fmap = cv2.cvtColor(mapped_img_fmap2, cv2.COLOR_RGB2BGR)
+    img_fmap_match = cv2.drawMatches(img1_fmap,
                                      kp1,
-                                     cv2.cvtColor(mapped_img_fmap2,
-                                                  cv2.COLOR_RGB2BGR),
+                                     img2_fmap,
                                      kp2,
                                      fmap_matches,
                                      None,
@@ -228,9 +255,20 @@ def plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2, output, batch,
     ax_fmap_match.set_title('GT correspondences in feature map')
     ax_fmap_match.axis('off')
 
-    tmpfig = plt.figure(2)
-    plt.imshow(red_cm(img_fmap2))
-    plt.savefig('mapped_img_fmap2_matplotlib.png')
+    ax_fmap_match_downsampled = fig.add_subplot(gs[1, 4:])
+    img_fmap_match_downsampled = cv2.drawMatches(img1_fmap,
+                                                 kp1,
+                                                 img2_fmap,
+                                                 kp2,
+                                                 fmap_matches,
+                                                 None,
+                                                 matchesMask=match_mask,
+                                                 matchColor=(145, 232, 144,
+                                                             .5))
+    ax_fmap_match_downsampled.imshow(img_fmap_match_downsampled)
+    ax_fmap_match_downsampled.set_title(
+        'GT correspondences in feature map downsampled')
+    ax_fmap_match_downsampled.axis('off')
 
     return fig
 
