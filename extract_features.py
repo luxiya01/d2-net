@@ -1,11 +1,12 @@
 import argparse
 
+import os
 import numpy as np
 
-import imageio
+from matplotlib import pyplot as plt
 
-import os
 import torch
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 
@@ -13,6 +14,7 @@ import scipy
 import scipy.io
 import scipy.misc
 
+from lib.model import D2Net as D2NetSoftDetection
 from lib.model_test import D2Net
 from lib.utils import preprocess_image
 from lib.pyramid import process_multiscale
@@ -24,14 +26,25 @@ device = torch.device("cuda:0" if use_cuda else "cpu")
 # Argument parsing
 parser = argparse.ArgumentParser(description='Feature extraction script')
 
-parser.add_argument('--image_path',
+parser.add_argument(
+    '--data_dir',
+    type=str,
+    required=True,
+    help=
+    'path to a directory containing a subdirectory named "patches" with npz data files'
+)
+parser.add_argument('--feat_dir',
                     type=str,
                     required=True,
-                    help='path to a directory containing npz data files')
+                    help='directory name for the resulting features')
+parser.add_argument('--log_dir',
+                    type=str,
+                    required=True,
+                    help='path to tensorboard logging dir')
 
 parser.add_argument('--preprocessing',
                     type=str,
-                    default='torch',
+                    default=None,
                     help='image preprocessing (caffe or torch)')
 parser.add_argument('--model_file',
                     type=str,
@@ -77,19 +90,24 @@ print(args)
 model = D2Net(model_file=args.model_file,
               use_relu=args.use_relu,
               use_cuda=use_cuda)
+soft_detection_model = D2NetSoftDetection(model_file=args.model_file,
+                                          use_cuda=use_cuda)
+
+# Tensorboard logging
+writer = SummaryWriter(args.log_dir)
 
 # Process the patches directory
+patches_dir = os.path.join(args.data_dir, 'patches')
 files = [
-    os.path.join(args.image_path, x) for x in os.listdir(args.image_path)
+    os.path.join(patches_dir, x) for x in os.listdir(patches_dir)
     if x.split('.')[-1] == 'npz' and x.split('.')[0].isnumeric()
 ]
 
-outpath = os.path.join(args.image_path,
-                       f'{args.model_file.split("/")[-1].split(".")[0]}')
+outpath = os.path.join(args.data_dir, f'{args.feat_dir}')
 os.mkdir(outpath)
 print(outpath)
 
-for filename in tqdm(files, total=len(files)):
+for i, filename in tqdm(enumerate(files), total=len(files)):
     print(f'>> Generating features for path = {filename}')
     data = np.load(filename, allow_pickle=True)
 
@@ -117,6 +135,7 @@ for filename in tqdm(files, total=len(files)):
     input_image = preprocess_image(resized_image,
                                    preprocessing=args.preprocessing)
     with torch.no_grad():
+        # Hard detection
         if args.multiscale:
             keypoints, scores, descriptors = process_multiscale(
                 torch.tensor(input_image[np.newaxis, :, :, :].astype(
@@ -128,6 +147,19 @@ for filename in tqdm(files, total=len(files)):
                 device=device),
                                                                 model,
                                                                 scales=[1])
+        # Soft detection score map
+        batch = {
+            'image1':
+            torch.from_numpy(input_image.astype(
+                np.float32)).unsqueeze(0).to(device),
+            'image2':
+            torch.from_numpy(input_image.astype(
+                np.float32)).unsqueeze(0).to(device),
+        }
+        soft_detection_res = soft_detection_model(batch)
+        soft_detection_scores = soft_detection_res['scores1'].cpu()
+        soft_detection_scores = np.transpose(soft_detection_scores,
+                                             [1, 2, 0]).squeeze()
 
     # Input image coordinates
     keypoints[:, 0] *= fact_i
@@ -153,3 +185,31 @@ for filename in tqdm(files, total=len(files)):
                 })
     else:
         raise ValueError('Unknown output type.')
+
+    # Tensorboard logging
+
+    fig = plt.figure(figsize=(10, 5), constrained_layout=True)
+    gs = fig.add_gridspec(1, 3)
+    ax_orig_img = fig.add_subplot(gs[0, 0])
+    ax_orig_img.imshow(resized_image, cmap='Greys')
+    ax_orig_img.set_title(f'Original: {idx}')
+    ax_orig_img.axis('off')
+
+    ax_preprocessed_img = fig.add_subplot(gs[0, 1])
+    ax_preprocessed_img.imshow(np.transpose(input_image, [1, 2, 0]),
+                               cmap='Greys')
+    ax_preprocessed_img.scatter(x=[kp[0] for kp in keypoints],
+                                y=[kp[1] for kp in keypoints],
+                                s=1,
+                                c='y')
+    ax_preprocessed_img.set_title(f'Preprocessed: {idx}')
+    ax_preprocessed_img.axis('off')
+
+    ax_soft_detection = fig.add_subplot(gs[0, 2])
+    ax_soft_detection.imshow(soft_detection_scores, cmap='Reds')
+    ax_soft_detection.set_title(f'Soft detection score: {idx}')
+    ax_soft_detection.axis('off')
+    writer.add_figure(
+        f'model_{args.model_file}_preprocessing_{args.preprocessing}',
+        fig,
+        global_step=i)
