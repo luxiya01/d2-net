@@ -17,7 +17,7 @@ class SSSDataset(Dataset):
                  data_indices_file,
                  remove_trivial_pairs,
                  pos_round_to,
-                 debugging=False,
+                 remove_edge_corr=False,
                  one_channel=True,
                  plot_gt_correspondence=False,
                  max_num_corr=1000,
@@ -48,7 +48,6 @@ class SSSDataset(Dataset):
             - max_overlap: maximum amount of overlap required to be considered
               as an overlapping image pair
         """
-        self.debugging = debugging
         self.data_dir = data_dir
         self.patches_dir = os.path.join(self.data_dir, 'patches')
         self.img_type = img_type
@@ -62,6 +61,7 @@ class SSSDataset(Dataset):
             remove_trivial_pairs=remove_trivial_pairs)
         self.plot_gt_correspondence = plot_gt_correspondence
         self.max_num_corr = max_num_corr
+        self.remove_edge_corr = remove_edge_corr
 
     def _load_image(self, idx):
         """Given a patch index, load the correponding img_type (norm_intensity or
@@ -88,10 +88,28 @@ class SSSDataset(Dataset):
         # Get correspondences in OpenCV convention (shape: [num_corr, 2])
         pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
             idx1, idx2)
+        if self.remove_edge_corr:
+            lower = 16
+            upper = 240
+            valid_idx = np.where(
+                np.logical_and(
+                    np.logical_and(
+                        np.logical_and(corr1[:, 0] > lower,
+                                       corr1[:, 0] < upper),
+                        np.logical_and(corr1[:, 1] > lower,
+                                       corr1[:, 1] < upper)),
+                    np.logical_and(
+                        np.logical_and(corr2[:, 0] > lower,
+                                       corr2[:, 0] < upper),
+                        np.logical_and(corr2[:, 1] > lower,
+                                       corr2[:, 1] < upper))))
+            pos, corr1, corr2 = pos[valid_idx], corr1[valid_idx], corr2[
+                valid_idx]
         num_corr = corr1.shape[0]
+        print(f'Num correspondences: {num_corr}')
 
         # Sample corresopndences
-        if num_corr <= self.max_num_corr:
+        if self.max_num_corr is None or num_corr <= self.max_num_corr:
             idx = range(num_corr)
         else:
             idx = random.sample(range(num_corr), k=self.max_num_corr)
@@ -105,7 +123,6 @@ class SSSDataset(Dataset):
                                                        corr1,
                                                        corr2,
                                                        plot_keypoints=True,
-                                                       max_num_corr=None,
                                                        store=True)
 
     def __getitem__(self, pair_idx):
@@ -117,14 +134,8 @@ class SSSDataset(Dataset):
                                   preprocessing=self.preprocessing)
         image2 = preprocess_image(self._load_image(idx2),
                                   preprocessing=self.preprocessing)
-        if self.debugging:
-            num_corr = 2
-            pos = np.zeros((num_corr, 2))
-            corr1 = np.array([[0, 0], [0, 1]])
-            corr2 = np.array([[30, 200], [30, 201]])
-        else:
-            # Correspondences in OpenCV convention
-            pos, corr1, corr2 = self._sample_correspondences(idx1, idx2)
+        # Correspondences in OpenCV convention
+        pos, corr1, corr2 = self._sample_correspondences(idx1, idx2)
 
         if self.plot_gt_correspondence:
             self._plot_correspondences(idx1, idx2, corr1, corr2)

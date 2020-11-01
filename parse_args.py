@@ -39,6 +39,13 @@ def get_args():
         help='maximum overlap required to be considered as an overlapping pair'
     )
     parser.add_argument(
+        '--max_num_corr',
+        type=int,
+        default=None,
+        help=
+        'maximum number of correspondence pairs fed into the network per image pair'
+    )
+    parser.add_argument(
         '--pos_round_to',
         type=int,
         default=5,
@@ -63,6 +70,13 @@ def get_args():
                         type=float,
                         default=1e-3,
                         help='initial learning rate')
+    parser.add_argument(
+        '--safe_radius',
+        type=int,
+        default=4,
+        help=
+        'area (in feature map space) from which the negative samples will not be drawn'
+    )
     parser.add_argument('--batch_size', type=int, default=1, help='batch size')
     parser.add_argument('--num_workers',
                         type=int,
