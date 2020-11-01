@@ -19,12 +19,15 @@ def preprocess_image(image, preprocessing=None):
         mean = np.array([103.939, 116.779, 123.68])
         image = image - mean.reshape([3, 1, 1])
     elif preprocessing == 'torch':
-        image /= 255.0
+        ## Only divide the image by 255 if the image range is not (0,1)
+        if image.max() > 1:
+            image /= 255.0
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
         image = (image - mean.reshape([3, 1, 1])) / std.reshape([3, 1, 1])
     else:
         raise ValueError('Unknown preprocessing parameter.')
+    print(f'Preprocessed image range: {image.min()}, {image.max()}')
     return image
 
 
