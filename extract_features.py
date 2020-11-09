@@ -111,7 +111,7 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     print(f'>> Generating features for path = {filename}')
     data = np.load(filename, allow_pickle=True)
 
-    image = data['norm_intensity']
+    image = data['norm_intensity_artefact_removed']
     idx = data['ids']
 
     if len(image.shape) == 2:

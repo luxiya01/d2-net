@@ -24,8 +24,10 @@ def get_args():
     parser.add_argument(
         '--img_type',
         type=str,
-        default='norm_intensity',
-        help='image type used (norm_intensity or unnorm_intensity)')
+        default='norm_intensity_artefact_removed',
+        help=
+        'image type used (norm_intensity, norm_intensity_artefact_removed or unnorm_intensity)'
+    )
     parser.add_argument(
         '--min_overlap',
         type=float,
