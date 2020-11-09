@@ -106,7 +106,6 @@ class SSSDataset(Dataset):
             pos, corr1, corr2 = pos[valid_idx], corr1[valid_idx], corr2[
                 valid_idx]
         num_corr = corr1.shape[0]
-        print(f'Num correspondences: {num_corr}')
 
         # Sample corresopndences
         if self.max_num_corr is None or num_corr <= self.max_num_corr:
