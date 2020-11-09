@@ -155,8 +155,8 @@ def plot_intermediate_results(pos1,
     pos2_aux = pos2.cpu().numpy()
     idx = range(pos1_aux.shape[1])
 
-    fig = plt.figure(figsize=(15, 5), constrained_layout=True)
-    gs = fig.add_gridspec(2, 6)
+    fig = plt.figure(figsize=(10, 5), constrained_layout=True)
+    gs = fig.add_gridspec(2, 4)
     ax_img1 = fig.add_subplot(gs[0, 0])
     img1 = imshow_image(batch['image1'][idx_in_batch].cpu().numpy(),
                         preprocessing=batch['preprocessing'])
@@ -171,33 +171,24 @@ def plot_intermediate_results(pos1,
     ax_img2.set_title(f'Image2: {idx2}')
     ax_img2.axis('off')
 
-    ax_img_match = fig.add_subplot(gs[0, 2:4])
+    ax_img_match_downsampled = fig.add_subplot(gs[0, 2:])
     kp1, kp2, matches = pos_to_matches(pos1_aux, pos2_aux, idx)
-    img_match = cv2.drawMatches(img1,
-                                kp1,
-                                img2,
-                                kp2,
-                                matches,
-                                None,
-                                matchColor=(145, 232, 144, .5))
-    ax_img_match.imshow(img_match)
-    ax_img_match.set_title('GT correspondences')
-    ax_img_match.axis('off')
-    print(f'img_match range: {img_match.min()}, {img_match.max()}')
-
-    ax_img_match_downsampled = fig.add_subplot(gs[0, 4:])
     idx_corr_show = random.sample(range(len(matches)),
                                   min(max_num_corr_show, len(matches)))
-    match_mask = np.zeros_like(matches)
-    match_mask[idx_corr_show] = 1
-    img_match_downsampled = cv2.drawMatches(img1,
-                                            kp1,
-                                            img2,
-                                            kp2,
-                                            matches,
-                                            None,
-                                            matchesMask=match_mask,
-                                            matchColor=(145, 232, 144, .5))
+    matches_mask = np.array([0 for i in range(len(matches))])
+    matches_mask[idx_corr_show] = 1
+    matches_mask = matches_mask.tolist()
+
+    img_match_downsampled = cv2.drawMatches(
+        img1,
+        kp1,
+        img2,
+        kp2,
+        matches,
+        None,
+        matchesMask=matches_mask,
+        matchColor=(145, 232, 144, .5),
+        flags=cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
     ax_img_match_downsampled.imshow(img_match_downsampled)
     ax_img_match_downsampled.set_title('GT correspondences downsampled')
     ax_img_match_downsampled.axis('off')
@@ -215,7 +206,7 @@ def plot_intermediate_results(pos1,
     ax_fmap2.axis('off')
 
     red_cm = matplotlib.cm.get_cmap('Reds')
-    ax_fmap_match = fig.add_subplot(gs[1, 2:4])
+    ax_fmap_match_downsampled = fig.add_subplot(gs[1, 2:])
     norm_img_fmap1 = (img_fmap1 - img_fmap1.min()) / (img_fmap1.max() -
                                                       img_fmap1.min())
     mapped_img_fmap1 = red_cm(norm_img_fmap1)
@@ -236,35 +227,19 @@ def plot_intermediate_results(pos1,
     fmap_kp1, fmap_kp2, fmap_matches = pos_to_matches(
         upscale_positions(fmap_pos1, scaling_steps),
         upscale_positions(fmap_pos2, scaling_steps), idx)
-    print(
-        f'img_fmap1 range: {mapped_img_fmap1.min()}, {mapped_img_fmap1.max()}')
     img1_fmap = cv2.cvtColor(mapped_img_fmap1, cv2.COLOR_RGB2BGR)
     img2_fmap = cv2.cvtColor(mapped_img_fmap2, cv2.COLOR_RGB2BGR)
-    img_fmap_match = cv2.drawMatches(img1_fmap,
-                                     kp1,
-                                     img2_fmap,
-                                     kp2,
-                                     fmap_matches,
-                                     None,
-                                     matchColor=(0, 22, 120, .5))
 
-    print(
-        f'img_fmap_match range: {img_fmap_match.min()}, {img_fmap_match.max()}'
-    )
-    ax_fmap_match.imshow(img_fmap_match)
-    ax_fmap_match.set_title('GT correspondences in feature map')
-    ax_fmap_match.axis('off')
-
-    ax_fmap_match_downsampled = fig.add_subplot(gs[1, 4:])
-    img_fmap_match_downsampled = cv2.drawMatches(img1_fmap,
-                                                 kp1,
-                                                 img2_fmap,
-                                                 kp2,
-                                                 fmap_matches,
-                                                 None,
-                                                 matchesMask=match_mask,
-                                                 matchColor=(145, 232, 144,
-                                                             .5))
+    img_fmap_match_downsampled = cv2.drawMatches(
+        img1_fmap,
+        kp1,
+        img2_fmap,
+        kp2,
+        fmap_matches,
+        None,
+        matchesMask=matches_mask,
+        matchColor=(145, 232, 144, .5),
+        flags=cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
     ax_fmap_match_downsampled.imshow(img_fmap_match_downsampled)
     ax_fmap_match_downsampled.set_title(
         'GT correspondences in feature map downsampled')
