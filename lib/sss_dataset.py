@@ -21,8 +21,8 @@ class SSSDataset(Dataset):
                  one_channel=True,
                  plot_gt_correspondence=False,
                  max_num_corr=1000,
-                 preprocessing='torch',
-                 img_type='norm_intensity',
+                 preprocessing=None,
+                 img_type='norm_intensity_artefact_removed',
                  min_overlap=.3,
                  max_overlap=.99):
         """
@@ -65,12 +65,11 @@ class SSSDataset(Dataset):
 
     def _load_image(self, idx):
         """Given a patch index, load the correponding img_type (norm_intensity or
-        unnorm_intensity), convert from grayscale to rgb if not one_channel."""
+        unnorm_intensity), convert from grayscale to rgb if not one_channel.
+        Keep range in (0, 1)"""
         patch_name = '.'.join([str(idx), 'npz'])
         image = np.load(os.path.join(self.patches_dir,
                                      patch_name))[self.img_type]
-        # (0, 1) -> (0, 255) (range assumed by lib/utils.preprocess_image)
-        image *= 255
         image = image[:, :, np.newaxis]
         # grayscale -> 3 color channels
         if not self.one_channel:

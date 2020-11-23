@@ -12,16 +12,7 @@ def preprocess_image(image, preprocessing=None):
     image = np.transpose(image, [2, 0, 1])
     if preprocessing is None:
         pass
-    elif preprocessing == 'caffe':
-        # RGB -> BGR
-        image = image[::-1, :, :]
-        # Zero-center by mean pixel
-        mean = np.array([103.939, 116.779, 123.68])
-        image = image - mean.reshape([3, 1, 1])
     elif preprocessing == 'torch':
-        ## Only divide the image by 255 if the image range is not (0,1)
-        if image.max() > 1:
-            image /= 255.0
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
         image = (image - mean.reshape([3, 1, 1])) / std.reshape([3, 1, 1])
@@ -33,12 +24,7 @@ def preprocess_image(image, preprocessing=None):
 
 def imshow_image(image, preprocessing=None):
     if preprocessing is None:
-        pass
-    elif preprocessing == 'caffe':
-        mean = np.array([103.939, 116.779, 123.68])
-        image = image + mean.reshape([3, 1, 1])
-        # RGB -> BGR
-        image = image[::-1, :, :]
+        image *= 255.0
     elif preprocessing == 'torch':
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])

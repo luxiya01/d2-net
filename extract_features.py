@@ -16,7 +16,7 @@ import scipy.misc
 
 from lib.model import D2Net as D2NetSoftDetection
 from lib.model_test import D2Net
-from lib.utils import preprocess_image
+from lib.utils import preprocess_image, imshow_image
 from lib.pyramid import process_multiscale
 
 # CUDA
@@ -41,6 +41,13 @@ parser.add_argument('--log_dir',
                     type=str,
                     required=True,
                     help='path to tensorboard logging dir')
+parser.add_argument(
+    '--store_separate_pngs',
+    action='store_true',
+    default=False,
+    help=
+    'store images as separate png files. If False, images will be logged to tensorboard'
+)
 
 parser.add_argument('--preprocessing',
                     type=str,
@@ -94,7 +101,11 @@ soft_detection_model = D2NetSoftDetection(model_file=args.model_file,
                                           use_cuda=use_cuda)
 
 # Tensorboard logging
-writer = SummaryWriter(args.log_dir)
+if args.store_separate_pngs:
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+else:
+    writer = SummaryWriter(args.log_dir)
 
 # Process the patches directory
 patches_dir = os.path.join(args.data_dir, 'patches')
@@ -111,7 +122,9 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     print(f'>> Generating features for path = {filename}')
     data = np.load(filename, allow_pickle=True)
 
+    # keep range in (0, 1)
     image = data['norm_intensity_artefact_removed']
+
     idx = data['ids']
 
     if len(image.shape) == 2:
@@ -196,8 +209,8 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     ax_orig_img.axis('off')
 
     ax_preprocessed_img = fig.add_subplot(gs[0, 1])
-    ax_preprocessed_img.imshow(np.transpose(input_image, [1, 2, 0]),
-                               cmap='Greys')
+    preprocessed_img = imshow_image(input_image, args.preprocessing)
+    ax_preprocessed_img.imshow(preprocessed_img, cmap='Greys')
     ax_preprocessed_img.scatter(x=[kp[0] for kp in keypoints],
                                 y=[kp[1] for kp in keypoints],
                                 s=1,
@@ -209,7 +222,11 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     ax_soft_detection.imshow(soft_detection_scores, cmap='Reds')
     ax_soft_detection.set_title(f'Soft detection score: {idx}')
     ax_soft_detection.axis('off')
-    writer.add_figure(
-        f'model_{args.model_file}_preprocessing_{args.preprocessing}',
-        fig,
-        global_step=i)
+    if args.store_separate_pngs:
+        model_name = os.path.basename(os.path.normpath(args.model_file))
+        plt.savefig(os.path.join(args.log_dir, f'{idx}.png'))
+    else:  # store to tensorboard
+        writer.add_figure(
+            f'model_{args.model_file}_preprocessing_{args.preprocessing}',
+            fig,
+            global_step=i)
