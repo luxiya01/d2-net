@@ -31,7 +31,7 @@ def get_args():
     parser.add_argument(
         '--min_overlap',
         type=float,
-        default=.3,
+        default=.1,
         help='minimum overlap required to be considered as an overlapping pair'
     )
     parser.add_argument(
@@ -43,7 +43,7 @@ def get_args():
     parser.add_argument(
         '--max_num_corr',
         type=int,
-        default=None,
+        default=500,
         help=
         'maximum number of correspondence pairs fed into the network per image pair'
     )
