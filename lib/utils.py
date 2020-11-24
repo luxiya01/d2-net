@@ -7,6 +7,18 @@ import torch
 from lib.exceptions import EmptyTensorError
 
 
+def image_net_mean_std():
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    return mean, std
+
+
+def show_tensor_image(image, mean, std):
+    image = image * std.reshape([3, 1, 1]) + mean.reshape([3, 1, 1])
+    image = image.permute(1, 2, 0).cpu().numpy()
+    return np.round(image * 255).astype(np.uint8)
+
+
 def preprocess_image(image, preprocessing=None):
     image = image.astype(np.float32)
     image = np.transpose(image, [2, 0, 1])

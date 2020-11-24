@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 
 from lib.utils import (grid_positions, upscale_positions, downscale_positions,
-                       savefig, imshow_image)
+                       savefig, show_tensor_image)
 from lib.exceptions import NoGradientError, EmptyTensorError
 
 matplotlib.use('Agg')
@@ -158,15 +158,15 @@ def plot_intermediate_results(pos1,
     fig = plt.figure(figsize=(10, 5), constrained_layout=True)
     gs = fig.add_gridspec(2, 4)
     ax_img1 = fig.add_subplot(gs[0, 0])
-    img1 = imshow_image(batch['image1'][idx_in_batch].cpu().numpy(),
-                        preprocessing=batch['preprocessing'])
+    img1 = show_tensor_image(batch['image1'][idx_in_batch], batch['mean'],
+                             batch['std'])
     ax_img1.imshow(img1)
     ax_img1.set_title(f'Image1: {idx1}')
     ax_img1.axis('off')
 
     ax_img2 = fig.add_subplot(gs[0, 1])
-    img2 = imshow_image(batch['image2'][idx_in_batch].cpu().numpy(),
-                        preprocessing=batch['preprocessing'])
+    img2 = show_tensor_image(batch['image2'][idx_in_batch], batch['mean'],
+                             batch['std'])
     ax_img2.imshow(img2)
     ax_img2.set_title(f'Image2: {idx2}')
     ax_img2.axis('off')
@@ -263,8 +263,8 @@ def plot_network_res(pos1, pos2, batch, idx_in_batch, output):
     n_sp = 4
     plt.figure()
     plt.subplot(1, n_sp, 1)
-    im1 = imshow_image(batch['image1'][idx_in_batch].cpu().numpy(),
-                       preprocessing=batch['preprocessing'])
+    im1 = show_tensor_image(batch['image1'][idx_in_batch], batch['mean'],
+                            batch['std'])
     plt.imshow(im1)
 
     plt.scatter(pos1_aux[1, :],
@@ -278,8 +278,8 @@ def plot_network_res(pos1, pos2, batch, idx_in_batch, output):
     plt.imshow(output['scores1'][idx_in_batch].data.cpu().numpy(), cmap='Reds')
     plt.axis('off')
     plt.subplot(1, n_sp, 3)
-    im2 = imshow_image(batch['image2'][idx_in_batch].cpu().numpy(),
-                       preprocessing=batch['preprocessing'])
+    im2 = show_tensor_image(batch['image2'][idx_in_batch], batch['mean'],
+                            batch['std'])
     plt.imshow(im2)
     plt.scatter(pos2_aux[1, :],
                 pos2_aux[0, :],

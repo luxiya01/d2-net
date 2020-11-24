@@ -4,27 +4,29 @@ import os
 import numpy as np
 import random
 import torch
+from torchvision import transforms
 from torch.utils.data import Dataset
-from lib.utils import preprocess_image
 from sss_data_processing.src.correspondence_getter import CorrespondenceGetter
+from sss_data_processing.src.utils import load_correspondence
 
 
 class SSSDataset(Dataset):
     """Side scan sonar image patches dataset. Correspondences are given in numpy
     convention (x-axis pointing downwards, y-axis pointing to the right.)"""
-    def __init__(self,
-                 data_dir,
-                 data_indices_file,
-                 remove_trivial_pairs,
-                 pos_round_to,
-                 remove_edge_corr=False,
-                 one_channel=True,
-                 plot_gt_correspondence=False,
-                 max_num_corr=1000,
-                 preprocessing=None,
-                 img_type='norm_intensity_artefact_removed',
-                 min_overlap=.3,
-                 max_overlap=.99):
+    def __init__(
+        self,
+        data_dir,
+        data_indices_file,
+        remove_trivial_pairs,
+        pos_round_to=5,  #default round to .2
+        transform=None,
+        remove_edge_corr=False,
+        one_channel=False,
+        plot_gt_correspondence=False,
+        max_num_corr=1000,
+        img_type='norm_intensity_artefact_removed',
+        min_overlap=.3,
+        max_overlap=.99):
         """
         Args:
             - data_dir: path to the sss patch data
@@ -51,7 +53,6 @@ class SSSDataset(Dataset):
         self.data_dir = data_dir
         self.patches_dir = os.path.join(self.data_dir, 'patches')
         self.img_type = img_type
-        self.preprocessing = preprocessing
         self.one_channel = one_channel
         self.correspondence_getter = CorrespondenceGetter(
             self.data_dir, pos_round_to, data_indices_file)
@@ -62,6 +63,9 @@ class SSSDataset(Dataset):
         self.plot_gt_correspondence = plot_gt_correspondence
         self.max_num_corr = max_num_corr
         self.remove_edge_corr = remove_edge_corr
+        if not transform:
+            transform = transforms.Compose([transforms.ToTensor()])
+        self.transform = transform
 
     def _load_image(self, idx):
         """Given a patch index, load the correponding img_type (norm_intensity or
@@ -70,6 +74,9 @@ class SSSDataset(Dataset):
         patch_name = '.'.join([str(idx), 'npz'])
         image = np.load(os.path.join(self.patches_dir,
                                      patch_name))[self.img_type]
+        # image range -> (0, 1)
+        image = (image - image.min()) / (image.max() - image.min())
+
         image = image[:, :, np.newaxis]
         # grayscale -> 3 color channels
         if not self.one_channel:
@@ -85,8 +92,16 @@ class SSSDataset(Dataset):
         The correspondences are given by CorrespondenceGetter in OpenCV
         convention."""
         # Get correspondences in OpenCV convention (shape: [num_corr, 2])
-        pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
-            idx1, idx2)
+        try:
+            pos, corr1, corr2 = load_correspondence(
+                os.path.join(self.correspondence_getter.out_dir,
+                             f'{idx1}_{idx2}.corr'))
+        except Exception as e:
+            print(
+                f'Calculate correspondences for ({idx1}, {idx2}) on the fly...'
+            )
+            pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
+                idx1, idx2, store=True)
         if self.remove_edge_corr:
             lower = 16
             upper = 240
@@ -128,11 +143,9 @@ class SSSDataset(Dataset):
         given by the CorrespondenceGetter to numpy convention that will be used
         by the networks"""
         idx1, idx2 = self.overlapping_pairs[pair_idx]
-        image1 = preprocess_image(self._load_image(idx1),
-                                  preprocessing=self.preprocessing)
-        image2 = preprocess_image(self._load_image(idx2),
-                                  preprocessing=self.preprocessing)
-        # Correspondences in OpenCV convention
+        image1 = self.transform(self._load_image(idx1))
+        image2 = self.transform(self._load_image(idx2))
+
         pos, corr1, corr2 = self._sample_correspondences(idx1, idx2)
 
         if self.plot_gt_correspondence:
@@ -145,10 +158,11 @@ class SSSDataset(Dataset):
         return {
             'idx1': idx1,
             'idx2': idx2,
-            'image1': torch.from_numpy(image1.astype(np.float32)),
-            'image2': torch.from_numpy(image2.astype(np.float32)),
+            'image1': image1,
+            'image2': image2,
             'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2],
             'pos': torch.from_numpy(pos.astype(np.float32)),
+            # Correspondences in OpenCV convention
             'corr1': torch.from_numpy(corr1.astype(np.float32)),
             'corr2': torch.from_numpy(corr2.astype(np.float32))
         }

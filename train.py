@@ -12,6 +12,7 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
 
 from tqdm import tqdm
 
@@ -21,6 +22,7 @@ from lib.sss_dataset import SSSDataset
 from lib.exceptions import NoGradientError
 from lib.loss import loss_function
 from lib.model import D2Net
+from lib.utils import image_net_mean_std
 import parse_args
 
 # CUDA
@@ -47,10 +49,17 @@ optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                        lr=args.lr)
 
 # Dataset
+mean, std = image_net_mean_std()
+data_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.GaussianBlur(kernel_size=5),
+    transforms.ColorJitter(brightness=.5, contrast=.5, saturation=.5, hue=.5),
+    transforms.Normalize(mean=mean, std=std)
+])
 training_dataset = SSSDataset(data_dir=args.data_dir,
                               data_indices_file=args.data_indices_file,
                               remove_trivial_pairs=args.remove_trivial_pairs,
-                              preprocessing=args.preprocessing,
+                              transform=data_transform,
                               img_type=args.img_type,
                               min_overlap=args.min_overlap,
                               max_overlap=args.max_overlap,
@@ -101,9 +110,10 @@ def process_epoch(epoch_idx,
         batch['epoch_idx'] = epoch_idx
         batch['batch_idx'] = batch_idx
         batch['batch_size'] = args.batch_size
-        batch['preprocessing'] = args.preprocessing
         batch['log_interval'] = args.log_interval
         batch['global_step'] = epoch_idx * len(dataloader) + batch_idx
+        batch['mean'] = mean
+        batch['std'] = std
 
         try:
             loss = loss_function(model,

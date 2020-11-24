@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
 
 from tqdm import tqdm
 
@@ -16,7 +17,7 @@ import scipy.misc
 
 from lib.model import D2Net as D2NetSoftDetection
 from lib.model_test import D2Net
-from lib.utils import preprocess_image, imshow_image
+from lib.utils import image_net_mean_std, show_tensor_image
 from lib.pyramid import process_multiscale
 
 # CUDA
@@ -42,6 +43,13 @@ parser.add_argument('--log_dir',
                     required=True,
                     help='path to tensorboard logging dir')
 parser.add_argument(
+    '--img_type',
+    type=str,
+    default='norm_intensity_artefact_removed',
+    help=
+    'Image type used to extract features: (norm_intensity_artefact_removed, norm_intensity, unnorm_intensity)'
+)
+parser.add_argument(
     '--store_separate_pngs',
     action='store_true',
     default=False,
@@ -49,10 +57,6 @@ parser.add_argument(
     'store images as separate png files. If False, images will be logged to tensorboard'
 )
 
-parser.add_argument('--preprocessing',
-                    type=str,
-                    default=None,
-                    help='image preprocessing (caffe or torch)')
 parser.add_argument('--model_file',
                     type=str,
                     default='models/d2_tf.pth',
@@ -115,15 +119,21 @@ files = [
 ]
 
 outpath = os.path.join(args.data_dir, f'{args.feat_dir}')
-os.mkdir(outpath)
+if not os.path.exists(outpath):
+    os.mkdir(outpath)
 print(outpath)
+
+mean, std = image_net_mean_std()
+data_transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize(mean=mean, std=std)])
 
 for i, filename in tqdm(enumerate(files), total=len(files)):
     print(f'>> Generating features for path = {filename}')
     data = np.load(filename, allow_pickle=True)
 
     # keep range in (0, 1)
-    image = data['norm_intensity_artefact_removed']
+    image = data[args.img_type]
 
     idx = data['ids']
 
@@ -145,29 +155,24 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     fact_i = image.shape[0] / resized_image.shape[0]
     fact_j = image.shape[1] / resized_image.shape[1]
 
-    input_image = preprocess_image(resized_image,
-                                   preprocessing=args.preprocessing)
+    # image range -> (0, 1)
+    resized_image = (resized_image - resized_image.min()) / (
+        resized_image.max() - resized_image.min())
+    input_image = data_transform(resized_image).unsqueeze(0).to(device)
+
     with torch.no_grad():
         # Hard detection
         if args.multiscale:
             keypoints, scores, descriptors = process_multiscale(
-                torch.tensor(input_image[np.newaxis, :, :, :].astype(
-                    np.float32),
-                             device=device), model)
+                input_image, model)
         else:
-            keypoints, scores, descriptors = process_multiscale(torch.tensor(
-                input_image[np.newaxis, :, :, :].astype(np.float32),
-                device=device),
+            keypoints, scores, descriptors = process_multiscale(input_image,
                                                                 model,
                                                                 scales=[1])
         # Soft detection score map
         batch = {
-            'image1':
-            torch.from_numpy(input_image.astype(
-                np.float32)).unsqueeze(0).to(device),
-            'image2':
-            torch.from_numpy(input_image.astype(
-                np.float32)).unsqueeze(0).to(device),
+            'image1': input_image,
+            'image2': input_image,
         }
         soft_detection_res = soft_detection_model(batch)
         soft_detection_scores = soft_detection_res['scores1'].cpu()
@@ -209,7 +214,7 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     ax_orig_img.axis('off')
 
     ax_preprocessed_img = fig.add_subplot(gs[0, 1])
-    preprocessed_img = imshow_image(input_image, args.preprocessing)
+    preprocessed_img = show_tensor_image(input_image.squeeze(0), mean, std)
     ax_preprocessed_img.imshow(preprocessed_img, cmap='Greys')
     ax_preprocessed_img.scatter(x=[kp[0] for kp in keypoints],
                                 y=[kp[1] for kp in keypoints],
@@ -226,7 +231,4 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
         model_name = os.path.basename(os.path.normpath(args.model_file))
         plt.savefig(os.path.join(args.log_dir, f'{idx}.png'))
     else:  # store to tensorboard
-        writer.add_figure(
-            f'model_{args.model_file}_preprocessing_{args.preprocessing}',
-            fig,
-            global_step=i)
+        writer.add_figure(f'model_{args.model_file}', fig, global_step=i)
