@@ -158,8 +158,8 @@ class SSSDataset(Dataset):
         return {
             'idx1': idx1,
             'idx2': idx2,
-            'image1': image1,
-            'image2': image2,
+            'image1': image1.float(),
+            'image2': image2.float(),
             'overlap': self.correspondence_getter.overlap_matrix[idx1, idx2],
             'pos': torch.from_numpy(pos.astype(np.float32)),
             # Correspondences in OpenCV convention

@@ -158,7 +158,8 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     # image range -> (0, 1)
     resized_image = (resized_image - resized_image.min()) / (
         resized_image.max() - resized_image.min())
-    input_image = data_transform(resized_image).unsqueeze(0).to(device)
+    input_image = data_transform(resized_image).unsqueeze(0).to(device).float()
+    print(f'input_image range: {input_image.min()}, {input_image.max()}')
 
     with torch.no_grad():
         # Hard detection
