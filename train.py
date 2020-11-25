@@ -47,6 +47,11 @@ model = D2Net(model_file=args.model_file, use_cuda=use_cuda)
 # Optimizer
 optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                        lr=args.lr)
+# Learning rate scheduler
+scheduler = optim.lr_scheduler.StepLR(optimizer,
+                                      step_size=5,
+                                      gamma=.5,
+                                      verbose=True)
 
 # Dataset
 mean, std = image_net_mean_std()
@@ -216,6 +221,9 @@ for epoch_idx in range(args.num_epochs):
         best_checkpoint_path = os.path.join(
             args.checkpoint_directory, '%s.best.pth' % args.checkpoint_prefix)
         shutil.copy(checkpoint_path, best_checkpoint_path)
+
+    # Reduce the learning rate according to LR schedule
+    scheduler.step()
 
 # Close the log file
 log_file.close()
