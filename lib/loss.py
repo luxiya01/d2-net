@@ -19,10 +19,11 @@ def loss_function(model,
                   batch,
                   device,
                   writer,
+                  ignore_score_edges=False,
                   margin=1,
                   safe_radius=4,
                   scaling_steps=3,
-                  min_num_corr=1):
+                  min_num_corr=128):
     output = model({
         'image1': batch['image1'].to(device),
         'image2': batch['image2'].to(device)
@@ -104,19 +105,28 @@ def loss_function(model,
         has_grad = True
         n_valid_samples += 1
 
-        if batch['batch_idx'] % batch['log_interval'] == 0:
+        if batch['batch_idx'] % batch['img_log_interval'] == 0:
             # log image to tensorboard
-            fig = plot_intermediate_results(pos1, pos2, fmap_pos1, fmap_pos2,
-                                            output, batch, idx_in_batch,
-                                            scaling_steps)
+            fig = plot_intermediate_results(
+                pos1,
+                pos2,
+                fmap_pos1,
+                fmap_pos2,
+                output,
+                batch,
+                idx_in_batch,
+                scaling_steps,
+                ignore_score_edges=ignore_score_edges)
             if batch['train']:
-                writer.add_figure(f'train_GT_correspondences_and_fmaps',
-                                  fig,
-                                  global_step=batch['global_step'])
+                writer.add_figure(
+                    f'train_GT_correspondences_and_fmaps_{idx1}_{idx2}',
+                    fig,
+                    global_step=batch['global_step'])
             else:
-                writer.add_figure(f'valid_GT_correspondences_and_fmaps',
-                                  fig,
-                                  global_step=batch['global_step'])
+                writer.add_figure(
+                    f'valid_GT_correspondences_and_fmaps_{idx1}_{idx2}',
+                    fig,
+                    global_step=batch['global_step'])
 
     if not has_grad:
         raise NoGradientError
@@ -147,7 +157,8 @@ def plot_intermediate_results(pos1,
                               batch,
                               idx_in_batch,
                               scaling_steps,
-                              max_num_corr_show=100):
+                              max_num_corr_show=100,
+                              ignore_score_edges=False):
     idx1 = batch['idx1'][idx_in_batch]
     idx2 = batch['idx2'][idx_in_batch]
 
@@ -195,12 +206,24 @@ def plot_intermediate_results(pos1,
 
     ax_fmap1 = fig.add_subplot(gs[1, 0])
     img_fmap1 = output['scores1'][idx_in_batch].data.cpu().numpy()
+    img_fmap1_mean = img_fmap1.mean()
+    if ignore_score_edges:
+        img_fmap1[:2, :] = img_fmap1_mean
+        img_fmap1[-2:, :] = img_fmap1_mean
+        img_fmap1[:, :2] = img_fmap1_mean
+        img_fmap1[:, -2:] = img_fmap1_mean
     ax_fmap1.imshow(img_fmap1, cmap='Reds')
     ax_fmap1.set_title(f'Soft detection scores1: {idx1}')
     ax_fmap1.axis('off')
 
     ax_fmap2 = fig.add_subplot(gs[1, 1])
     img_fmap2 = output['scores2'][idx_in_batch].data.cpu().numpy()
+    img_fmap2_mean = img_fmap2.mean()
+    if ignore_score_edges:
+        img_fmap2[:2, :] = img_fmap2_mean
+        img_fmap2[-2:, :] = img_fmap2_mean
+        img_fmap2[:, :2] = img_fmap2_mean
+        img_fmap2[:, -2:] = img_fmap2_mean
     ax_fmap2.imshow(img_fmap2, cmap='Reds')
     ax_fmap2.set_title(f'Soft detection scores2: {idx2}')
     ax_fmap2.axis('off')
@@ -293,7 +316,7 @@ def plot_network_res(pos1, pos2, batch, idx_in_batch, output):
     plt.axis('off')
     savefig('train_vis/%s.%02d.%02d.%d.%d.%d.overlap_%02d.png' %
             ('train' if batch['train'] else 'valid', batch['epoch_idx'],
-             batch['batch_idx'] // batch['log_interval'], idx_in_batch,
+             batch['batch_idx'] // batch['img_log_interval'], idx_in_batch,
              batch['idx1'][idx_in_batch], batch['idx2'][idx_in_batch],
              batch['overlap'][idx_in_batch] * 100),
             dpi=300)

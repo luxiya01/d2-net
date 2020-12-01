@@ -38,10 +38,6 @@ parser.add_argument('--feat_dir',
                     type=str,
                     required=True,
                     help='directory name for the resulting features')
-parser.add_argument('--log_dir',
-                    type=str,
-                    required=True,
-                    help='path to tensorboard logging dir')
 parser.add_argument(
     '--img_type',
     type=str,
@@ -105,11 +101,12 @@ soft_detection_model = D2NetSoftDetection(model_file=args.model_file,
                                           use_cuda=use_cuda)
 
 # Tensorboard logging
+log_dir = os.path.join(args.feat_dir, 'logs')
 if args.store_separate_pngs:
-    if not os.path.exists(args.log_dir):
-        os.makedirs(args.log_dir)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 else:
-    writer = SummaryWriter(args.log_dir)
+    writer = SummaryWriter(log_dir)
 
 # Process the patches directory
 patches_dir = os.path.join(args.data_dir, 'patches')
@@ -117,11 +114,6 @@ files = [
     os.path.join(patches_dir, x) for x in os.listdir(patches_dir)
     if x.split('.')[-1] == 'npz' and x.split('.')[0].isnumeric()
 ]
-
-outpath = os.path.join(args.data_dir, f'{args.feat_dir}')
-if not os.path.exists(outpath):
-    os.mkdir(outpath)
-print(outpath)
 
 mean, std = image_net_mean_std()
 data_transform = transforms.Compose(
@@ -132,8 +124,9 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     print(f'>> Generating features for path = {filename}')
     data = np.load(filename, allow_pickle=True)
 
-    # keep range in (0, 1)
+    # image range -> (0, 1)
     image = data[args.img_type]
+    image = (image - image.min()) / (image.max() - image.min())
 
     idx = data['ids']
 
@@ -154,10 +147,6 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
 
     fact_i = image.shape[0] / resized_image.shape[0]
     fact_j = image.shape[1] / resized_image.shape[1]
-
-    # image range -> (0, 1)
-    resized_image = (resized_image - resized_image.min()) / (
-        resized_image.max() - resized_image.min())
     input_image = data_transform(resized_image).unsqueeze(0).to(device).float()
     print(f'input_image range: {input_image.min()}, {input_image.max()}')
 
@@ -186,7 +175,7 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     # i, j -> u, v
     keypoints = keypoints[:, [1, 0, 2]]
 
-    store_path = os.path.join(outpath, str(idx) + args.output_extension)
+    store_path = os.path.join(args.feat_dir, str(idx) + args.output_extension)
 
     if args.output_type == 'npz':
         with open(store_path, 'wb') as output_file:
@@ -230,6 +219,6 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     ax_soft_detection.axis('off')
     if args.store_separate_pngs:
         model_name = os.path.basename(os.path.normpath(args.model_file))
-        plt.savefig(os.path.join(args.log_dir, f'{idx}.png'))
+        plt.savefig(os.path.join(log_dir, f'{idx}.png'))
     else:  # store to tensorboard
         writer.add_figure(f'model_{args.model_file}', fig, global_step=i)

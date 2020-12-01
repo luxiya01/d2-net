@@ -14,8 +14,8 @@ def image_net_mean_std():
 
 
 def show_tensor_image(image, mean, std):
-    image = image * std.reshape([3, 1, 1]) + mean.reshape([3, 1, 1])
-    image = image.permute(1, 2, 0).cpu().numpy()
+    image = image.cpu() * std.reshape([3, 1, 1]) + mean.reshape([3, 1, 1])
+    image = image.permute(1, 2, 0).numpy()
     return np.round(image * 255).astype(np.uint8)
 
 

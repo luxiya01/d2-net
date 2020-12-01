@@ -42,7 +42,9 @@ print(args)
 writer = SummaryWriter(args.log_dir)
 
 # Creating CNN model
-model = D2Net(model_file=args.model_file, use_cuda=use_cuda)
+model = D2Net(model_file=args.model_file,
+              use_cuda=use_cuda,
+              ignore_score_edges=args.ignore_score_edges)
 
 # Optimizer
 optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
@@ -58,7 +60,7 @@ mean, std = image_net_mean_std()
 data_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.GaussianBlur(kernel_size=5),
-    transforms.ColorJitter(brightness=.5, contrast=.5, saturation=.5, hue=.5),
+    transforms.ColorJitter(brightness=.2, contrast=.2, saturation=.2),
     transforms.Normalize(mean=mean, std=std)
 ])
 training_dataset = SSSDataset(data_dir=args.data_dir,
@@ -67,12 +69,10 @@ training_dataset = SSSDataset(data_dir=args.data_dir,
                               transform=data_transform,
                               img_type=args.img_type,
                               min_overlap=args.min_overlap,
-                              max_overlap=args.max_overlap,
+                              max_overlap=.99,
                               max_num_corr=args.max_num_corr,
-                              pos_round_to=args.pos_round_to,
-                              plot_gt_correspondence=False,
-                              one_channel=False,
-                              remove_edge_corr=False)
+                              pos_round_to=5)
+
 print(f'Num training data: {len(training_dataset)}')
 if args.use_validation:
     num_validation = max(int(len(training_dataset) * args.validation_size), 1)
@@ -102,6 +102,15 @@ def process_epoch(epoch_idx,
                   log_file,
                   args,
                   train=True):
+    # Define frequency of image logging
+    if args.batch_size > 1:
+        img_log_interval = len(dataloader)
+    else:
+        img_log_interval = len(dataloader) // 10
+        if img_log_interval == 0:
+            img_log_interval = len(dataloader)
+    print(f'img_log_interval: {img_log_interval}')
+
     epoch_losses = []
 
     torch.set_grad_enabled(train)
@@ -116,6 +125,7 @@ def process_epoch(epoch_idx,
         batch['batch_idx'] = batch_idx
         batch['batch_size'] = args.batch_size
         batch['log_interval'] = args.log_interval
+        batch['img_log_interval'] = img_log_interval
         batch['global_step'] = epoch_idx * len(dataloader) + batch_idx
         batch['mean'] = mean
         batch['std'] = std
@@ -125,7 +135,9 @@ def process_epoch(epoch_idx,
                                  batch,
                                  device,
                                  writer=writer,
-                                 safe_radius=args.safe_radius)
+                                 safe_radius=args.safe_radius,
+                                 margin=args.margin,
+                                 ignore_score_edges=args.ignore_score_edges)
         except NoGradientError:
             continue
 
@@ -159,15 +171,17 @@ def process_epoch(epoch_idx,
 
 
 # Create the checkpoint directory
-if os.path.isdir(args.checkpoint_directory):
+checkpoint_directory = os.path.join(args.log_dir, 'checkpoints')
+if os.path.isdir(checkpoint_directory):
     print('[Warning] Checkpoint directory already exists.')
 else:
-    os.mkdir(args.checkpoint_directory)
+    os.mkdir(checkpoint_directory)
 
 # Open the log file for writing
-if os.path.exists(args.log_file):
-    print('[Warning] Log file already exists.')
-log_file = open(args.log_file, 'a+')
+log_file_path = os.path.join(args.log_dir, 'log.txt')
+if os.path.exists(log_file_path):
+    print(f'[Warning] Log file {log_file_path} already exists.')
+log_file = open(log_file_path, 'a+')
 
 # Initialize the history
 train_loss_history = []
@@ -204,7 +218,7 @@ for epoch_idx in range(args.num_epochs):
 
     # Save the current checkpoint
     checkpoint_path = os.path.join(
-        args.checkpoint_directory,
+        checkpoint_directory,
         '%s.%02d.pth' % (args.checkpoint_prefix, epoch_idx))
     checkpoint = {
         'args': args,
@@ -219,7 +233,8 @@ for epoch_idx in range(args.num_epochs):
             and validation_loss_history[-1] < min_validation_loss):
         min_validation_loss = validation_loss_history[-1]
         best_checkpoint_path = os.path.join(
-            args.checkpoint_directory, '%s.best.pth' % args.checkpoint_prefix)
+            checkpoint_directory,
+            '%s.best.pth.epoch%s' % (args.checkpoint_prefix, epoch_idx))
         shutil.copy(checkpoint_path, best_checkpoint_path)
 
     # Reduce the learning rate according to LR schedule

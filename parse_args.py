@@ -35,30 +35,13 @@ def get_args():
         help='minimum overlap required to be considered as an overlapping pair'
     )
     parser.add_argument(
-        '--max_overlap',
-        type=float,
-        default=.99,
-        help='maximum overlap required to be considered as an overlapping pair'
-    )
-    parser.add_argument(
         '--max_num_corr',
         type=int,
         default=500,
         help=
         'maximum number of correspondence pairs fed into the network per image pair'
     )
-    parser.add_argument(
-        '--pos_round_to',
-        type=int,
-        default=5,
-        help=
-        'the decimals that the physical positions will be rounded to during correspondence calculation, pos_round_to = 5 -> round to closest 0.2'
-    )
 
-    parser.add_argument('--preprocessing',
-                        type=str,
-                        default=None,
-                        help='image preprocessing (None, caffe or torch)')
     parser.add_argument('--model_file',
                         type=str,
                         default='models/d2_tf.pth',
@@ -79,10 +62,22 @@ def get_args():
         help=
         'area (in feature map space) from which the negative samples will not be drawn'
     )
+    parser.add_argument(
+        '--margin',
+        type=float,
+        default=1.,
+        help=
+        'margin used in the loss function, the loss function requires dist(neg) > dist(pos) + margin'
+    )
+    parser.add_argument(
+        '--ignore_score_edges',
+        action='store_true',
+        help='set detection scores at the edge of the feature map to 0')
+
     parser.add_argument('--batch_size', type=int, default=1, help='batch size')
     parser.add_argument('--num_workers',
                         type=int,
-                        default=4,
+                        default=8,
                         help='number of workers for data loading')
 
     parser.add_argument('--use_validation',
@@ -93,26 +88,17 @@ def get_args():
     parser.add_argument(
         '--validation_size',
         type=float,
-        default=.1,
+        default=.05,
         help='percentage of the dataset used as validation set')
 
     parser.add_argument('--log_interval',
                         type=int,
                         default=50,
                         help='loss logging interval')
-    parser.add_argument('--log_file',
-                        type=str,
-                        default='log.txt',
-                        help='loss logging file')
     parser.add_argument('--log_dir',
                         type=str,
                         required=True,
                         help='logging directory')
-
-    parser.add_argument('--checkpoint_directory',
-                        type=str,
-                        default='checkpoints',
-                        help='directory for training checkpoints')
     parser.add_argument('--checkpoint_prefix',
                         type=str,
                         default='d2',

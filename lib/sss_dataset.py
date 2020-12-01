@@ -20,9 +20,6 @@ class SSSDataset(Dataset):
         remove_trivial_pairs,
         pos_round_to=5,  #default round to .2
         transform=None,
-        remove_edge_corr=False,
-        one_channel=False,
-        plot_gt_correspondence=False,
         max_num_corr=1000,
         img_type='norm_intensity_artefact_removed',
         min_overlap=.3,
@@ -39,10 +36,6 @@ class SSSDataset(Dataset):
             - pos_round_to: the decimals that the physical positions will be rounded to
               (e.g. 1 = round to closest integer, 2 = round to closest .5, 10 =
               round to closest .1)
-            - one_channel: if True, grayscale image is kept as is, else the
-              image is converted into three channels (RGB) by copying the
-              grayscale channel
-            - plot_gt_correspondence: plot groundtruth correspondences
             - max_num_corr: max pairs of correspondences given for a pair of
               images
             - min_overlap: minimum amount of overlap required to be considered
@@ -53,16 +46,13 @@ class SSSDataset(Dataset):
         self.data_dir = data_dir
         self.patches_dir = os.path.join(self.data_dir, 'patches')
         self.img_type = img_type
-        self.one_channel = one_channel
+        self.max_num_corr = max_num_corr
         self.correspondence_getter = CorrespondenceGetter(
             self.data_dir, pos_round_to, data_indices_file)
         self.overlapping_pairs = self.correspondence_getter.get_all_pairs_with_target_overlap(
             min_overlap=min_overlap,
             max_overlap=max_overlap,
             remove_trivial_pairs=remove_trivial_pairs)
-        self.plot_gt_correspondence = plot_gt_correspondence
-        self.max_num_corr = max_num_corr
-        self.remove_edge_corr = remove_edge_corr
         if not transform:
             transform = transforms.Compose([transforms.ToTensor()])
         self.transform = transform
@@ -77,10 +67,9 @@ class SSSDataset(Dataset):
         # image range -> (0, 1)
         image = (image - image.min()) / (image.max() - image.min())
 
-        image = image[:, :, np.newaxis]
         # grayscale -> 3 color channels
-        if not self.one_channel:
-            image = np.repeat(image, 3, -1)
+        image = image[:, :, np.newaxis]
+        image = np.repeat(image, 3, -1)
         return image
 
     def __len__(self):
@@ -102,23 +91,7 @@ class SSSDataset(Dataset):
             )
             pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
                 idx1, idx2, store=True)
-        if self.remove_edge_corr:
-            lower = 16
-            upper = 240
-            valid_idx = np.where(
-                np.logical_and(
-                    np.logical_and(
-                        np.logical_and(corr1[:, 0] > lower,
-                                       corr1[:, 0] < upper),
-                        np.logical_and(corr1[:, 1] > lower,
-                                       corr1[:, 1] < upper)),
-                    np.logical_and(
-                        np.logical_and(corr2[:, 0] > lower,
-                                       corr2[:, 0] < upper),
-                        np.logical_and(corr2[:, 1] > lower,
-                                       corr2[:, 1] < upper))))
-            pos, corr1, corr2 = pos[valid_idx], corr1[valid_idx], corr2[
-                valid_idx]
+
         num_corr = corr1.shape[0]
 
         # Sample corresopndences
@@ -147,9 +120,6 @@ class SSSDataset(Dataset):
         image2 = self.transform(self._load_image(idx2))
 
         pos, corr1, corr2 = self._sample_correspondences(idx1, idx2)
-
-        if self.plot_gt_correspondence:
-            self._plot_correspondences(idx1, idx2, corr1, corr2)
 
         # Convert from OpenCV convention to Numpy convention
         corr1 = corr1[:, [1, 0]]

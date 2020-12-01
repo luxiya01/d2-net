@@ -42,12 +42,14 @@ class DenseFeatureExtractionModule(nn.Module):
 
 
 class SoftDetectionModule(nn.Module):
-    def __init__(self, soft_local_max_size=3):
+    def __init__(self, soft_local_max_size=3, ignore_score_edges=False):
         super(SoftDetectionModule, self).__init__()
 
         self.soft_local_max_size = soft_local_max_size
 
         self.pad = self.soft_local_max_size // 2
+
+        self.ignore_score_edges = ignore_score_edges
 
     def forward(self, batch):
         b = batch.size(0)
@@ -56,6 +58,10 @@ class SoftDetectionModule(nn.Module):
 
         max_per_sample = torch.max(batch.view(b, -1), dim=1)[0]
         exp = torch.exp(batch / max_per_sample.view(b, 1, 1, 1))
+        #        sum_exp = (self.soft_local_max_size**2 *
+        #                   F.avg_pool2d(F.pad(exp, [self.pad] * 4, mode='replicate'),
+        #                                self.soft_local_max_size,
+        #                                stride=1))
         sum_exp = (
             self.soft_local_max_size**2 *
             F.avg_pool2d(F.pad(exp, [self.pad] * 4, mode='constant', value=1.),
@@ -69,19 +75,29 @@ class SoftDetectionModule(nn.Module):
         all_scores = local_max_score * depth_wise_max_score
         score = torch.max(all_scores, dim=1)[0]
 
+        if self.ignore_score_edges:
+            score[:, :2, :] = 0
+            score[:, -2:, :] = 0
+            score[:, :, :2] = 0
+            score[:, :, -2:] = 0
+
         score = score / torch.sum(score.view(b, -1), dim=1).view(b, 1, 1)
 
         return score
 
 
 class D2Net(nn.Module):
-    def __init__(self, model_file=None, use_cuda=True):
+    def __init__(self,
+                 model_file=None,
+                 use_cuda=True,
+                 ignore_score_edges=False):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
             finetune_feature_extraction=True, use_cuda=use_cuda)
 
-        self.detection = SoftDetectionModule()
+        self.detection = SoftDetectionModule(
+            ignore_score_edges=ignore_score_edges)
 
         if model_file is not None:
             if use_cuda:
@@ -89,6 +105,8 @@ class D2Net(nn.Module):
             else:
                 self.load_state_dict(
                     torch.load(model_file, map_location='cpu')['model'])
+
+        self.ignore_score_edges = ignore_score_edges
 
     def forward(self, batch):
         b = batch['image1'].size(0)
