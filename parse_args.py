@@ -44,13 +44,19 @@ def get_args():
 
     parser.add_argument('--model_file',
                         type=str,
-                        default='models/d2_tf.pth',
+                        default=None,
                         help='path to the full model')
 
     parser.add_argument('--num_epochs',
                         type=int,
                         default=10,
                         help='number of training epochs')
+    parser.add_argument(
+        '--init_epoch',
+        type=int,
+        default=0,
+        help=
+        'initial epoch number (used when resume training from a checkpoint)')
     parser.add_argument('--lr',
                         type=float,
                         default=1e-3,
