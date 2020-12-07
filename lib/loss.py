@@ -100,7 +100,7 @@ def loss_function(model,
                                              negative_distance2)
 
         loss = loss + (torch.sum(scores1 * scores2 * F.relu(margin + diff)) /
-                       torch.sum(scores1 * scores2))
+                       (torch.sum(scores1 * scores2) + 1e-7))
 
         has_grad = True
         n_valid_samples += 1
@@ -136,14 +136,19 @@ def loss_function(model,
     return loss
 
 
-def pos_to_matches(pos1_aux, pos2_aux, idx):
+def pos_to_matches(pos1_aux, pos2_aux, idx, ignore_score_edges):
+    offset = 0
+    if ignore_score_edges:
+        offset = 16
     kp1 = [
-        cv2.KeyPoint(x=pos1_aux[1, i], y=pos1_aux[0, i], _size=.25**2)
-        for i in idx
+        cv2.KeyPoint(x=pos1_aux[1, i] + offset,
+                     y=pos1_aux[0, i] + offset,
+                     _size=.25**2) for i in idx
     ]
     kp2 = [
-        cv2.KeyPoint(x=pos2_aux[1, i], y=pos2_aux[0, i], _size=.25**2)
-        for i in idx
+        cv2.KeyPoint(x=pos2_aux[1, i] + offset,
+                     y=pos2_aux[0, i] + offset,
+                     _size=.25**2) for i in idx
     ]
     matches = [cv2.DMatch(i, i, 0) for i in idx]
     return kp1, kp2, matches
@@ -183,7 +188,8 @@ def plot_intermediate_results(pos1,
     ax_img2.axis('off')
 
     ax_img_match_downsampled = fig.add_subplot(gs[0, 2:])
-    kp1, kp2, matches = pos_to_matches(pos1_aux, pos2_aux, idx)
+    kp1, kp2, matches = pos_to_matches(pos1_aux, pos2_aux, idx,
+                                       ignore_score_edges)
     idx_corr_show = random.sample(range(len(matches)),
                                   min(max_num_corr_show, len(matches)))
     matches_mask = np.array([0 for i in range(len(matches))])
@@ -207,11 +213,6 @@ def plot_intermediate_results(pos1,
     ax_fmap1 = fig.add_subplot(gs[1, 0])
     img_fmap1 = output['scores1'][idx_in_batch].data.cpu().numpy()
     img_fmap1_mean = img_fmap1.mean()
-    if ignore_score_edges:
-        img_fmap1[:2, :] = img_fmap1_mean
-        img_fmap1[-2:, :] = img_fmap1_mean
-        img_fmap1[:, :2] = img_fmap1_mean
-        img_fmap1[:, -2:] = img_fmap1_mean
     ax_fmap1.imshow(img_fmap1, cmap='Reds')
     ax_fmap1.set_title(f'Soft detection scores1: {idx1}')
     ax_fmap1.axis('off')
@@ -219,11 +220,6 @@ def plot_intermediate_results(pos1,
     ax_fmap2 = fig.add_subplot(gs[1, 1])
     img_fmap2 = output['scores2'][idx_in_batch].data.cpu().numpy()
     img_fmap2_mean = img_fmap2.mean()
-    if ignore_score_edges:
-        img_fmap2[:2, :] = img_fmap2_mean
-        img_fmap2[-2:, :] = img_fmap2_mean
-        img_fmap2[:, :2] = img_fmap2_mean
-        img_fmap2[:, -2:] = img_fmap2_mean
     ax_fmap2.imshow(img_fmap2, cmap='Reds')
     ax_fmap2.set_title(f'Soft detection scores2: {idx2}')
     ax_fmap2.axis('off')

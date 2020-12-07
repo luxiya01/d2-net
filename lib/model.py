@@ -6,7 +6,10 @@ import torchvision.models as models
 
 
 class DenseFeatureExtractionModule(nn.Module):
-    def __init__(self, finetune_feature_extraction=False, use_cuda=True):
+    def __init__(self,
+                 finetune_feature_extraction=False,
+                 use_cuda=True,
+                 ignore_score_edges=True):
         super(DenseFeatureExtractionModule, self).__init__()
 
         model = models.vgg16()
@@ -36,8 +39,13 @@ class DenseFeatureExtractionModule(nn.Module):
         if use_cuda:
             self.model = self.model.cuda()
 
+        self.ignore_score_edges = ignore_score_edges
+
     def forward(self, batch):
         output = self.model(batch)
+        if self.ignore_score_edges:
+            # output shape: 2 x 512 x 28 x 28
+            output = output[:, :, 2:-2, 2:-2]
         return output
 
 
@@ -57,7 +65,7 @@ class SoftDetectionModule(nn.Module):
         batch = F.relu(batch)
 
         max_per_sample = torch.max(batch.view(b, -1), dim=1)[0]
-        exp = torch.exp(batch / max_per_sample.view(b, 1, 1, 1))
+        exp = torch.exp(batch / (max_per_sample + 1e-7).view(b, 1, 1, 1))
         #        sum_exp = (self.soft_local_max_size**2 *
         #                   F.avg_pool2d(F.pad(exp, [self.pad] * 4, mode='replicate'),
         #                                self.soft_local_max_size,
@@ -67,21 +75,16 @@ class SoftDetectionModule(nn.Module):
             F.avg_pool2d(F.pad(exp, [self.pad] * 4, mode='constant', value=1.),
                          self.soft_local_max_size,
                          stride=1))
-        local_max_score = exp / sum_exp
+        local_max_score = exp / (sum_exp + 1e-7)
 
         depth_wise_max = torch.max(batch, dim=1)[0]
-        depth_wise_max_score = batch / depth_wise_max.unsqueeze(1)
+        depth_wise_max_score = batch / (depth_wise_max + 1e-7).unsqueeze(1)
 
         all_scores = local_max_score * depth_wise_max_score
         score = torch.max(all_scores, dim=1)[0]
 
-        if self.ignore_score_edges:
-            score[:, :2, :] = 0
-            score[:, -2:, :] = 0
-            score[:, :, :2] = 0
-            score[:, :, -2:] = 0
-
-        score = score / torch.sum(score.view(b, -1), dim=1).view(b, 1, 1)
+        score = score / torch.sum(
+            (score + 1e-7).view(b, -1), dim=1).view(b, 1, 1)
 
         return score
 
@@ -94,10 +97,11 @@ class D2Net(nn.Module):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
-            finetune_feature_extraction=True, use_cuda=use_cuda)
-
-        self.detection = SoftDetectionModule(
+            finetune_feature_extraction=True,
+            use_cuda=use_cuda,
             ignore_score_edges=ignore_score_edges)
+
+        self.detection = SoftDetectionModule()
 
         if model_file is not None:
             if use_cuda:

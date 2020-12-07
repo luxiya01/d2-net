@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class DenseFeatureExtractionModule(nn.Module):
-    def __init__(self, use_relu=True, use_cuda=True):
+    def __init__(self, use_relu=True, use_cuda=True, ignore_score_edges=False):
         super(DenseFeatureExtractionModule, self).__init__()
 
         self.model = nn.Sequential(
@@ -35,11 +35,14 @@ class DenseFeatureExtractionModule(nn.Module):
 
         self.use_relu = use_relu
 
+        self.ignore_score_edges = ignore_score_edges
+
         if use_cuda:
             self.model = self.model.cuda()
 
     def forward(self, batch):
         output = self.model(batch)
+        print(f'output shape: {output.shape}')
         if self.use_relu:
             output = F.relu(output)
         return output
@@ -50,8 +53,7 @@ class D2Net(nn.Module):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
-            use_relu=use_relu, use_cuda=use_cuda
-        )
+            use_relu=use_relu, use_cuda=use_cuda)
 
         self.detection = HardDetectionModule()
 
@@ -61,7 +63,8 @@ class D2Net(nn.Module):
             if use_cuda:
                 self.load_state_dict(torch.load(model_file)['model'])
             else:
-                self.load_state_dict(torch.load(model_file, map_location='cpu')['model'])
+                self.load_state_dict(
+                    torch.load(model_file, map_location='cpu')['model'])
 
     def forward(self, batch):
         _, _, h, w = batch.size()
@@ -84,15 +87,12 @@ class HardDetectionModule(nn.Module):
 
         self.edge_threshold = edge_threshold
 
-        self.dii_filter = torch.tensor(
-            [[0, 1., 0], [0, -2., 0], [0, 1., 0]]
-        ).view(1, 1, 3, 3)
-        self.dij_filter = 0.25 * torch.tensor(
-            [[1., 0, -1.], [0, 0., 0], [-1., 0, 1.]]
-        ).view(1, 1, 3, 3)
-        self.djj_filter = torch.tensor(
-            [[0, 0, 0], [1., -2., 1.], [0, 0, 0]]
-        ).view(1, 1, 3, 3)
+        self.dii_filter = torch.tensor([[0, 1., 0], [0, -2., 0],
+                                        [0, 1., 0]]).view(1, 1, 3, 3)
+        self.dij_filter = 0.25 * torch.tensor([[1., 0, -1.], [0, 0., 0],
+                                               [-1., 0, 1.]]).view(1, 1, 3, 3)
+        self.djj_filter = torch.tensor([[0, 0, 0], [1., -2., 1.],
+                                        [0, 0, 0]]).view(1, 1, 3, 3)
 
     def forward(self, batch):
         b, c, h, w = batch.size()
@@ -106,27 +106,25 @@ class HardDetectionModule(nn.Module):
         is_local_max = (batch == local_max)
         del local_max
 
-        dii = F.conv2d(
-            batch.view(-1, 1, h, w), self.dii_filter.to(device), padding=1
-        ).view(b, c, h, w)
-        dij = F.conv2d(
-            batch.view(-1, 1, h, w), self.dij_filter.to(device), padding=1
-        ).view(b, c, h, w)
-        djj = F.conv2d(
-            batch.view(-1, 1, h, w), self.djj_filter.to(device), padding=1
-        ).view(b, c, h, w)
+        dii = F.conv2d(batch.view(-1, 1, h, w),
+                       self.dii_filter.to(device),
+                       padding=1).view(b, c, h, w)
+        dij = F.conv2d(batch.view(-1, 1, h, w),
+                       self.dij_filter.to(device),
+                       padding=1).view(b, c, h, w)
+        djj = F.conv2d(batch.view(-1, 1, h, w),
+                       self.djj_filter.to(device),
+                       padding=1).view(b, c, h, w)
 
         det = dii * djj - dij * dij
         tr = dii + djj
         del dii, dij, djj
 
-        threshold = (self.edge_threshold + 1) ** 2 / self.edge_threshold
+        threshold = (self.edge_threshold + 1)**2 / self.edge_threshold
         is_not_edge = torch.min(tr * tr / det <= threshold, det > 0)
 
-        detected = torch.min(
-            is_depth_wise_max,
-            torch.min(is_local_max, is_not_edge)
-        )
+        detected = torch.min(is_depth_wise_max,
+                             torch.min(is_local_max, is_not_edge))
         del is_depth_wise_max, is_local_max, is_not_edge
 
         return detected
@@ -136,36 +134,31 @@ class HandcraftedLocalizationModule(nn.Module):
     def __init__(self):
         super(HandcraftedLocalizationModule, self).__init__()
 
-        self.di_filter = torch.tensor(
-            [[0, -0.5, 0], [0, 0, 0], [0,  0.5, 0]]
-        ).view(1, 1, 3, 3)
-        self.dj_filter = torch.tensor(
-            [[0, 0, 0], [-0.5, 0, 0.5], [0, 0, 0]]
-        ).view(1, 1, 3, 3)
+        self.di_filter = torch.tensor([[0, -0.5, 0], [0, 0, 0],
+                                       [0, 0.5, 0]]).view(1, 1, 3, 3)
+        self.dj_filter = torch.tensor([[0, 0, 0], [-0.5, 0, 0.5],
+                                       [0, 0, 0]]).view(1, 1, 3, 3)
 
-        self.dii_filter = torch.tensor(
-            [[0, 1., 0], [0, -2., 0], [0, 1., 0]]
-        ).view(1, 1, 3, 3)
-        self.dij_filter = 0.25 * torch.tensor(
-            [[1., 0, -1.], [0, 0., 0], [-1., 0, 1.]]
-        ).view(1, 1, 3, 3)
-        self.djj_filter = torch.tensor(
-            [[0, 0, 0], [1., -2., 1.], [0, 0, 0]]
-        ).view(1, 1, 3, 3)
+        self.dii_filter = torch.tensor([[0, 1., 0], [0, -2., 0],
+                                        [0, 1., 0]]).view(1, 1, 3, 3)
+        self.dij_filter = 0.25 * torch.tensor([[1., 0, -1.], [0, 0., 0],
+                                               [-1., 0, 1.]]).view(1, 1, 3, 3)
+        self.djj_filter = torch.tensor([[0, 0, 0], [1., -2., 1.],
+                                        [0, 0, 0]]).view(1, 1, 3, 3)
 
     def forward(self, batch):
         b, c, h, w = batch.size()
         device = batch.device
 
-        dii = F.conv2d(
-            batch.view(-1, 1, h, w), self.dii_filter.to(device), padding=1
-        ).view(b, c, h, w)
-        dij = F.conv2d(
-            batch.view(-1, 1, h, w), self.dij_filter.to(device), padding=1
-        ).view(b, c, h, w)
-        djj = F.conv2d(
-            batch.view(-1, 1, h, w), self.djj_filter.to(device), padding=1
-        ).view(b, c, h, w)
+        dii = F.conv2d(batch.view(-1, 1, h, w),
+                       self.dii_filter.to(device),
+                       padding=1).view(b, c, h, w)
+        dij = F.conv2d(batch.view(-1, 1, h, w),
+                       self.dij_filter.to(device),
+                       padding=1).view(b, c, h, w)
+        djj = F.conv2d(batch.view(-1, 1, h, w),
+                       self.djj_filter.to(device),
+                       padding=1).view(b, c, h, w)
         det = dii * djj - dij * dij
 
         inv_hess_00 = djj / det
@@ -173,12 +166,12 @@ class HandcraftedLocalizationModule(nn.Module):
         inv_hess_11 = dii / det
         del dii, dij, djj, det
 
-        di = F.conv2d(
-            batch.view(-1, 1, h, w), self.di_filter.to(device), padding=1
-        ).view(b, c, h, w)
-        dj = F.conv2d(
-            batch.view(-1, 1, h, w), self.dj_filter.to(device), padding=1
-        ).view(b, c, h, w)
+        di = F.conv2d(batch.view(-1, 1, h, w),
+                      self.di_filter.to(device),
+                      padding=1).view(b, c, h, w)
+        dj = F.conv2d(batch.view(-1, 1, h, w),
+                      self.dj_filter.to(device),
+                      padding=1).view(b, c, h, w)
 
         step_i = -(inv_hess_00 * di + inv_hess_01 * dj)
         step_j = -(inv_hess_01 * di + inv_hess_11 * dj)
