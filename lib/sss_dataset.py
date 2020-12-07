@@ -8,6 +8,7 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 from sss_data_processing.src.correspondence_getter import CorrespondenceGetter
 from sss_data_processing.src.utils import load_correspondence
+from PIL import Image
 
 
 class SSSDataset(Dataset):
@@ -18,10 +19,11 @@ class SSSDataset(Dataset):
         data_dir,
         data_indices_file,
         remove_trivial_pairs,
+        ignore_edges=False,
         pos_round_to=5,  #default round to .2
         transform=None,
         max_num_corr=1000,
-        img_type='norm_intensity_artefact_removed',
+        img_type='unnormalised',
         min_overlap=.3,
         max_overlap=.99):
         """
@@ -45,6 +47,8 @@ class SSSDataset(Dataset):
         """
         self.data_dir = data_dir
         self.patches_dir = os.path.join(self.data_dir, 'patches')
+        self.image_dir = os.path.join(self.data_dir,
+                                      os.path.join('images', img_type))
         self.img_type = img_type
         self.max_num_corr = max_num_corr
         self.correspondence_getter = CorrespondenceGetter(
@@ -56,21 +60,17 @@ class SSSDataset(Dataset):
         if not transform:
             transform = transforms.Compose([transforms.ToTensor()])
         self.transform = transform
+        self.ignore_edges = ignore_edges
 
     def _load_image(self, idx):
         """Given a patch index, load the correponding img_type (norm_intensity or
         unnorm_intensity), convert from grayscale to rgb if not one_channel.
         Keep range in (0, 1)"""
-        patch_name = '.'.join([str(idx), 'npz'])
-        image = np.load(os.path.join(self.patches_dir,
-                                     patch_name))[self.img_type]
-        # image range -> (0, 1)
-        image = (image - image.min()) / (image.max() - image.min())
+        patch_name = '.'.join([str(idx), 'png'])
 
-        # grayscale -> 3 color channels
-        image = image[:, :, np.newaxis]
-        image = np.repeat(image, 3, -1)
-        return image
+        image = Image.open(os.path.join(self.image_dir,
+                                        patch_name)).convert('RGB')
+        return np.array(image)
 
     def __len__(self):
         """Number of overlapping pairs in the dataset"""
@@ -91,6 +91,22 @@ class SSSDataset(Dataset):
             )
             pos, corr1, corr2 = self.correspondence_getter.get_correspondence(
                 idx1, idx2, store=True)
+
+        if self.ignore_edges:
+            min_bound, max_bound = 16, 240
+            corr1_edge_idx = np.argwhere(
+                np.logical_or(corr1 < min_bound, corr1 >= max_bound))[:, 0]
+            corr2_edge_idx = np.argwhere(
+                np.logical_or(corr2 < min_bound, corr2 >= max_bound))[:, 0]
+            edge_idx = np.unique(
+                np.concatenate([corr1_edge_idx, corr2_edge_idx]))
+
+            pos = np.delete(pos, edge_idx, axis=0)
+            corr1 = np.delete(corr1, edge_idx, axis=0)
+            corr2 = np.delete(corr2, edge_idx, axis=0)
+
+            corr1 = corr1 - min_bound
+            corr2 = corr2 - min_bound
 
         num_corr = corr1.shape[0]
 
