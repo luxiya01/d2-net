@@ -15,6 +15,8 @@ import scipy
 import scipy.io
 import scipy.misc
 
+from PIL import Image
+
 from lib.model import D2Net as D2NetSoftDetection
 from lib.model_test import D2Net
 from lib.utils import image_net_mean_std, show_tensor_image
@@ -39,9 +41,16 @@ parser.add_argument('--feat_dir',
                     required=True,
                     help='directory name for the resulting features')
 parser.add_argument(
+    '--ignore_score_edges',
+    action='store_true',
+    default=False,
+    help=
+    'whether soft detection score edges should be ignored, i.e. whether detections should be made at image edges'
+)
+parser.add_argument(
     '--img_type',
     type=str,
-    default='norm_intensity_artefact_removed',
+    default='unnormalised',
     help=
     'Image type used to extract features: (norm_intensity_artefact_removed, norm_intensity, unnorm_intensity)'
 )
@@ -96,9 +105,12 @@ print(args)
 # Creating CNN model
 model = D2Net(model_file=args.model_file,
               use_relu=args.use_relu,
-              use_cuda=use_cuda)
-soft_detection_model = D2NetSoftDetection(model_file=args.model_file,
-                                          use_cuda=use_cuda)
+              use_cuda=use_cuda,
+              ignore_score_edges=args.ignore_score_edges)
+soft_detection_model = D2NetSoftDetection(
+    model_file=args.model_file,
+    use_cuda=use_cuda,
+    ignore_score_edges=args.ignore_score_edges)
 
 # Tensorboard logging
 log_dir = os.path.join(args.feat_dir, 'logs')
@@ -109,11 +121,8 @@ else:
     writer = SummaryWriter(log_dir)
 
 # Process the patches directory
-patches_dir = os.path.join(args.data_dir, 'patches')
-files = [
-    os.path.join(patches_dir, x) for x in os.listdir(patches_dir)
-    if x.split('.')[-1] == 'npz' and x.split('.')[0].isnumeric()
-]
+image_dir = os.path.join(args.data_dir, os.path.join('images', args.img_type))
+files = [os.path.join(image_dir, x) for x in os.listdir(image_dir)]
 
 mean, std = image_net_mean_std()
 data_transform = transforms.Compose(
@@ -121,18 +130,10 @@ data_transform = transforms.Compose(
      transforms.Normalize(mean=mean, std=std)])
 
 for i, filename in tqdm(enumerate(files), total=len(files)):
-    print(f'>> Generating features for path = {filename}')
-    data = np.load(filename, allow_pickle=True)
-
-    # image range -> (0, 1)
-    image = data[args.img_type]
-    image = (image - image.min()) / (image.max() - image.min())
-
-    idx = data['ids']
-
-    if len(image.shape) == 2:
-        image = image[:, :, np.newaxis]
-        image = np.repeat(image, 3, -1)
+    idx = (os.path.basename(os.path.normpath(filename))).split('.')[0]
+    print(f'>> Generating features for path = {filename}, idx={idx}')
+    image = Image.open(filename).convert('RGB')
+    image = np.array(image)
 
     # TODO: switch to PIL.Image due to deprecation of scipy.misc.imresize.
     resized_image = image
@@ -214,6 +215,14 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     ax_preprocessed_img.axis('off')
 
     ax_soft_detection = fig.add_subplot(gs[0, 2])
+    soft_detection_scores_mean = soft_detection_scores.mean()
+
+    if args.ignore_score_edges:
+        soft_detection_scores[:2, :] = soft_detection_scores_mean
+        soft_detection_scores[-2:, :] = soft_detection_scores_mean
+        soft_detection_scores[:, :2] = soft_detection_scores_mean
+        soft_detection_scores[:, -2:] = soft_detection_scores_mean
+
     ax_soft_detection.imshow(soft_detection_scores, cmap='Reds')
     ax_soft_detection.set_title(f'Soft detection score: {idx}')
     ax_soft_detection.axis('off')
