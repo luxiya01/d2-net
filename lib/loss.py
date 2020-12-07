@@ -136,7 +136,7 @@ def loss_function(model,
     return loss
 
 
-def pos_to_matches(pos1_aux, pos2_aux, idx, ignore_score_edges):
+def pos_to_matches(pos1_aux, pos2_aux, idx, ignore_score_edges=False):
     offset = 0
     if ignore_score_edges:
         offset = 16

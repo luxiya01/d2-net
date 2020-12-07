@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument(
         '--img_type',
         type=str,
-        default='norm_intensity_artefact_removed',
+        default='unnormalised',
         help=
         'image type used (norm_intensity, norm_intensity_artefact_removed or unnorm_intensity)'
     )
