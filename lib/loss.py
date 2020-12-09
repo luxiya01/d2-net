@@ -46,9 +46,9 @@ def loss_function(model,
         _, h2, w2 = dense_features2.size()
         scores2 = output['scores2'][idx_in_batch].view(-1)
 
-        all_descriptors1 = F.normalize(dense_features1.view(c, -1), dim=0)
+        all_descriptors1 = F.normalize(dense_features1.reshape(c, -1), dim=0)
         descriptors1 = all_descriptors1
-        all_descriptors2 = F.normalize(dense_features2.view(c, -1), dim=0)
+        all_descriptors2 = F.normalize(dense_features2.reshape(c, -1), dim=0)
         descriptors2 = all_descriptors2
 
         # Sample GT correspondences (assume already in numpy convention)
@@ -105,7 +105,7 @@ def loss_function(model,
         has_grad = True
         n_valid_samples += 1
 
-        if batch['batch_idx'] % batch['img_log_interval'] == 0:
+        if batch['log_img']:
             # log image to tensorboard
             fig = plot_intermediate_results(
                 pos1,
@@ -310,10 +310,10 @@ def plot_network_res(pos1, pos2, batch, idx_in_batch, output):
     plt.subplot(1, n_sp, 4)
     plt.imshow(output['scores2'][idx_in_batch].data.cpu().numpy(), cmap='Reds')
     plt.axis('off')
-    savefig('train_vis/%s.%02d.%02d.%d.%d.%d.overlap_%02d.png' %
-            ('train' if batch['train'] else 'valid', batch['epoch_idx'],
-             batch['batch_idx'] // batch['img_log_interval'], idx_in_batch,
-             batch['idx1'][idx_in_batch], batch['idx2'][idx_in_batch],
-             batch['overlap'][idx_in_batch] * 100),
-            dpi=300)
+    savefig(
+        'train_vis/%s.%02d.%d.%d.%d.overlap_%02d.png' %
+        ('train' if batch['train'] else 'valid', batch['epoch_idx'],
+         idx_in_batch, batch['idx1'][idx_in_batch],
+         batch['idx2'][idx_in_batch], batch['overlap'][idx_in_batch] * 100),
+        dpi=300)
     plt.close()

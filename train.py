@@ -63,7 +63,19 @@ data_transform = transforms.Compose([
     transforms.ColorJitter(brightness=.2, contrast=.2, saturation=.2),
     transforms.Normalize(mean=mean, std=std)
 ])
+
+
+def get_log_img_pairs(dataset, log_img_len=10):
+    indices = []
+    log_img_len = min(len(dataset), log_img_len)
+    for i in range(log_img_len):
+        data = dataset[i]
+        indices.append((data['idx1'], data['idx2']))
+    return indices
+
+
 training_dataset = SSSDataset(data_dir=args.data_dir,
+                              ignore_edges=args.ignore_score_edges,
                               data_indices_file=args.data_indices_file,
                               remove_trivial_pairs=args.remove_trivial_pairs,
                               transform=data_transform,
@@ -72,6 +84,7 @@ training_dataset = SSSDataset(data_dir=args.data_dir,
                               max_overlap=.99,
                               max_num_corr=args.max_num_corr,
                               pos_round_to=5)
+training_log_img_pairs = get_log_img_pairs(training_dataset)
 
 print(f'Num training data: {len(training_dataset)}')
 if args.use_validation:
@@ -81,6 +94,9 @@ if args.use_validation:
 
     training_dataset, validation_dataset = torch.utils.data.random_split(
         training_dataset, lengths=[num_train, num_validation])
+    training_log_img_pairs = get_log_img_pairs(training_dataset)
+    validation_log_img_pairs = get_log_img_pairs(validation_dataset)
+
     validation_dataloader = DataLoader(validation_dataset,
                                        batch_size=args.batch_size,
                                        num_workers=args.num_workers,
@@ -101,16 +117,8 @@ def process_epoch(epoch_idx,
                   device,
                   log_file,
                   args,
+                  log_img_pairs,
                   train=True):
-    # Define frequency of image logging
-    if args.batch_size > 1:
-        img_log_interval = len(dataloader)
-    else:
-        img_log_interval = len(dataloader) // 10
-        if img_log_interval == 0:
-            img_log_interval = len(dataloader)
-    print(f'img_log_interval: {img_log_interval}')
-
     epoch_losses = []
 
     torch.set_grad_enabled(train)
@@ -125,10 +133,14 @@ def process_epoch(epoch_idx,
         batch['batch_idx'] = batch_idx
         batch['batch_size'] = args.batch_size
         batch['log_interval'] = args.log_interval
-        batch['img_log_interval'] = img_log_interval
         batch['global_step'] = epoch_idx * len(dataloader) + batch_idx
         batch['mean'] = mean
         batch['std'] = std
+
+        batch['log_img'] = False
+        patch_indices = (batch['idx1'][0], batch['idx2'][0])
+        if patch_indices in log_img_pairs:
+            batch['log_img'] = True
 
         try:
             loss = loss_function(model,
@@ -196,13 +208,21 @@ if args.use_validation:
                                         device,
                                         log_file,
                                         args,
+                                        log_img_pairs=validation_log_img_pairs,
                                         train=False)
 # Start the training
 for epoch_idx in range(args.num_epochs):
     # Process epoch
     train_loss_history.append(
-        process_epoch(epoch_idx, model, loss_function, optimizer,
-                      training_dataloader, device, log_file, args))
+        process_epoch(epoch_idx,
+                      model,
+                      loss_function,
+                      optimizer,
+                      training_dataloader,
+                      device,
+                      log_file,
+                      args,
+                      log_img_pairs=training_log_img_pairs))
 
     if args.use_validation:
         validation_loss_history.append(
@@ -214,6 +234,7 @@ for epoch_idx in range(args.num_epochs):
                           device,
                           log_file,
                           args,
+                          log_img_pairs=validation_log_img_pairs,
                           train=False))
 
     # Save the current checkpoint
