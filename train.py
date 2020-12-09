@@ -51,7 +51,7 @@ optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                        lr=args.lr)
 # Learning rate scheduler
 scheduler = optim.lr_scheduler.StepLR(optimizer,
-                                      step_size=5,
+                                      step_size=10,
                                       gamma=.5,
                                       verbose=True)
 
