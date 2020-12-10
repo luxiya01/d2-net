@@ -31,6 +31,7 @@ def loss_function(model,
 
     loss = torch.tensor(np.array([0], dtype=np.float32), device=device)
     has_grad = False
+    quantiles = torch.tensor([0, .05, .5, .95, 1], device=device)
 
     n_valid_samples = 0
     for idx_in_batch in range(batch['image1'].size(0)):
@@ -50,6 +51,35 @@ def loss_function(model,
         descriptors1 = all_descriptors1
         all_descriptors2 = F.normalize(dense_features2.reshape(c, -1), dim=0)
         descriptors2 = all_descriptors2
+
+        # Log: descriptor L2-norm
+        all_descriptors_1and2 = torch.stack(
+            [all_descriptors1, all_descriptors2])
+        descriptor_norm = torch.linalg.norm(all_descriptors_1and2, dim=0)
+        descriptor_norm_quantiles = torch.quantile(descriptor_norm, quantiles)
+        writer.add_scalars('L2-norm of [%s] embeddings' %
+                           ('train' if batch['train'] else 'valid'), {
+                               '0%-ile': descriptor_norm_quantiles[0],
+                               '5%-ile': descriptor_norm_quantiles[1],
+                               '50%-ile': descriptor_norm_quantiles[2],
+                               '95%-ile': descriptor_norm_quantiles[3],
+                               '100%-ile': descriptor_norm_quantiles[4]
+                           },
+                           global_step=batch['global_step'])
+
+        # Log: descriptor entries
+        descriptor_entries = all_descriptors_1and2.view(-1, )
+        descriptor_entries_quantiles = torch.quantile(descriptor_entries,
+                                                      quantiles)
+        writer.add_scalars('Descriptor entries of [%s] embeddings' %
+                           ('train' if batch['train'] else 'valid'), {
+                               '0%-ile': descriptor_entries_quantiles[0],
+                               '5%-ile': descriptor_entries_quantiles[1],
+                               '50%-ile': descriptor_entries_quantiles[2],
+                               '95%-ile': descriptor_entries_quantiles[3],
+                               '100%-ile': descriptor_entries_quantiles[4]
+                           },
+                           global_step=batch['global_step'])
 
         # Sample GT correspondences (assume already in numpy convention)
         corr1 = batch['corr1'][idx_in_batch].to(device)  # [num_corr, 2]
@@ -98,6 +128,25 @@ def loss_function(model,
 
         diff = positive_distance - torch.min(negative_distance1,
                                              negative_distance2)
+
+        # Log: number of active triplets (violate margin constraint)
+        num_active_triplets = torch.count_nonzero(diff > -margin)
+        writer.add_scalar('Number of [%s] active triplets' %
+                          ('train' if batch['train'] else 'valid'),
+                          num_active_triplets,
+                          global_step=batch['global_step'])
+
+        # Log: distance between pairs
+        dist_quantiles = torch.quantile(diff, quantiles)
+        writer.add_scalars('positive distance - negative distance [%s] batch' %
+                           ('train' if batch['train'] else 'valid'), {
+                               '0%-ile': dist_quantiles[0],
+                               '5%-ile': dist_quantiles[1],
+                               '50%-ile': dist_quantiles[2],
+                               '95%-ile': dist_quantiles[3],
+                               '100%-ile': dist_quantiles[4]
+                           },
+                           global_step=batch['global_step'])
 
         loss = loss + (torch.sum(scores1 * scores2 * F.relu(margin + diff)) /
                        (torch.sum(scores1 * scores2) + 1e-7))
