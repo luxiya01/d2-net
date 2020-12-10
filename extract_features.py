@@ -105,7 +105,8 @@ print(args)
 # Creating CNN model
 model = D2Net(model_file=args.model_file,
               use_relu=args.use_relu,
-              use_cuda=use_cuda)
+              use_cuda=use_cuda,
+              ignore_score_edges=args.ignore_score_edges)
 soft_detection_model = D2NetSoftDetection(
     model_file=args.model_file,
     use_cuda=use_cuda,

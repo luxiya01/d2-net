@@ -45,15 +45,22 @@ class DenseFeatureExtractionModule(nn.Module):
         print(f'output shape: {output.shape}')
         if self.use_relu:
             output = F.relu(output)
+
+        if self.ignore_score_edges:
+            output[:, :, :4, :] = 0
+            output[:, :, -4:, :] = 0
+            output[:, :, :, :4] = 0
+            output[:, :, :, -4:] = 0
+
         return output
 
 
 class D2Net(nn.Module):
-    def __init__(self, model_file=None, use_relu=True, use_cuda=True):
+    def __init__(self, model_file=None, use_relu=True, use_cuda=True, ignore_score_edges=False):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
-            use_relu=use_relu, use_cuda=use_cuda)
+            use_relu=use_relu, use_cuda=use_cuda, ignore_score_edges=ignore_score_edges)
 
         self.detection = HardDetectionModule()
 
