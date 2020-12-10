@@ -51,7 +51,7 @@ optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                        lr=args.lr)
 # Learning rate scheduler
 scheduler = optim.lr_scheduler.StepLR(optimizer,
-                                      step_size=10,
+                                      step_size=3,
                                       gamma=.5,
                                       verbose=True)
 
@@ -156,18 +156,20 @@ def process_epoch(epoch_idx,
         current_loss = loss.data.cpu().numpy()[0]
         epoch_losses.append(current_loss)
 
-        progress_bar.set_postfix(loss=('%.4f' % np.mean(epoch_losses)))
+        progress_bar.set_postfix(loss=('%.10f' % np.mean(epoch_losses)))
 
         if batch_idx % args.log_interval == 0:
             log_file.write('[%s] epoch %d - batch %d / %d - avg_loss: %f\n' %
                            ('train' if train else 'valid', epoch_idx,
                             batch_idx, len(dataloader), np.mean(epoch_losses)))
-
-            # log to tensorboard
-            writer.add_scalar('average [%s] loss' %
-                              ('train' if train else 'valid'),
-                              np.mean(epoch_losses),
-                              global_step=batch['global_step'])
+        # log to tensorboard
+        writer.add_scalar('average [%s] loss' %
+                          ('train' if train else 'valid'),
+                          np.mean(epoch_losses),
+                          global_step=batch['global_step'])
+        writer.add_scalar('exact [%s] loss' % ('train' if train else 'valid'),
+                          current_loss,
+                          global_step=batch['global_step'])
 
         if train:
             loss.backward()
