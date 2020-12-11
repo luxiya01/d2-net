@@ -47,15 +47,18 @@ def loss_function(model,
         _, h2, w2 = dense_features2.size()
         scores2 = output['scores2'][idx_in_batch].view(-1)
 
-        all_descriptors1 = F.normalize(dense_features1.reshape(c, -1), dim=0)
+        unnorm_all_descriptors1 = dense_features1.reshape(c, -1)
+        all_descriptors1 = F.normalize(unnorm_all_descriptors1, dim=0)
         descriptors1 = all_descriptors1
-        all_descriptors2 = F.normalize(dense_features2.reshape(c, -1), dim=0)
+        unnorm_all_descriptors2 = dense_features2.reshape(c, -1)
+        all_descriptors2 = F.normalize(unnorm_all_descriptors2, dim=0)
         descriptors2 = all_descriptors2
 
-        # Log: descriptor L2-norm
-        all_descriptors_1and2 = torch.stack(
-            [all_descriptors1, all_descriptors2])
-        descriptor_norm = torch.linalg.norm(all_descriptors_1and2, dim=0)
+        # Log: unnormalised descriptor L2-norm
+        unnorm_all_descriptors_1and2 = torch.stack(
+            [unnorm_all_descriptors1, unnorm_all_descriptors2])
+        descriptor_norm = torch.linalg.norm(unnorm_all_descriptors_1and2,
+                                            dim=0)
         descriptor_norm_quantiles = torch.quantile(descriptor_norm, quantiles)
         writer.add_scalars('L2-norm of [%s] embeddings' %
                            ('train' if batch['train'] else 'valid'), {
@@ -67,8 +70,8 @@ def loss_function(model,
                            },
                            global_step=batch['global_step'])
 
-        # Log: descriptor entries
-        descriptor_entries = all_descriptors_1and2.view(-1, )
+        # Log: unnormalised descriptor entries
+        descriptor_entries = unnorm_all_descriptors_1and2.view(-1, )
         descriptor_entries_quantiles = torch.quantile(descriptor_entries,
                                                       quantiles)
         writer.add_scalars('Descriptor entries of [%s] embeddings' %
@@ -185,19 +188,14 @@ def loss_function(model,
     return loss
 
 
-def pos_to_matches(pos1_aux, pos2_aux, idx, ignore_score_edges=False):
-    offset = 0
-    if ignore_score_edges:
-        offset = 16
+def pos_to_matches(pos1_aux, pos2_aux, idx):
     kp1 = [
-        cv2.KeyPoint(x=pos1_aux[1, i] + offset,
-                     y=pos1_aux[0, i] + offset,
-                     _size=.25**2) for i in idx
+        cv2.KeyPoint(x=pos1_aux[1, i], y=pos1_aux[0, i], _size=.25**2)
+        for i in idx
     ]
     kp2 = [
-        cv2.KeyPoint(x=pos2_aux[1, i] + offset,
-                     y=pos2_aux[0, i] + offset,
-                     _size=.25**2) for i in idx
+        cv2.KeyPoint(x=pos2_aux[1, i], y=pos2_aux[0, i], _size=.25**2)
+        for i in idx
     ]
     matches = [cv2.DMatch(i, i, 0) for i in idx]
     return kp1, kp2, matches
@@ -237,8 +235,7 @@ def plot_intermediate_results(pos1,
     ax_img2.axis('off')
 
     ax_img_match_downsampled = fig.add_subplot(gs[0, 2:])
-    kp1, kp2, matches = pos_to_matches(pos1_aux, pos2_aux, idx,
-                                       ignore_score_edges)
+    kp1, kp2, matches = pos_to_matches(pos1_aux, pos2_aux, idx)
     idx_corr_show = random.sample(range(len(matches)),
                                   min(max_num_corr_show, len(matches)))
     matches_mask = np.array([0 for i in range(len(matches))])
@@ -262,6 +259,11 @@ def plot_intermediate_results(pos1,
     ax_fmap1 = fig.add_subplot(gs[1, 0])
     img_fmap1 = output['scores1'][idx_in_batch].data.cpu().numpy()
     img_fmap1_mean = img_fmap1.mean()
+    if ignore_score_edges:
+        img_fmap1[:2, :] = img_fmap1_mean
+        img_fmap1[-2:, :] = img_fmap1_mean
+        img_fmap1[:, :2] = img_fmap1_mean
+        img_fmap1[:, -2:] = img_fmap1_mean
     ax_fmap1.imshow(img_fmap1, cmap='Reds')
     ax_fmap1.set_title(f'Soft detection scores1: {idx1}')
     ax_fmap1.axis('off')
@@ -269,6 +271,11 @@ def plot_intermediate_results(pos1,
     ax_fmap2 = fig.add_subplot(gs[1, 1])
     img_fmap2 = output['scores2'][idx_in_batch].data.cpu().numpy()
     img_fmap2_mean = img_fmap2.mean()
+    if ignore_score_edges:
+        img_fmap2[:2, :] = img_fmap2_mean
+        img_fmap2[-2:, :] = img_fmap2_mean
+        img_fmap2[:, :2] = img_fmap2_mean
+        img_fmap2[:, -2:] = img_fmap2_mean
     ax_fmap2.imshow(img_fmap2, cmap='Reds')
     ax_fmap2.set_title(f'Soft detection scores2: {idx2}')
     ax_fmap2.axis('off')
