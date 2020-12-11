@@ -105,9 +105,6 @@ class SSSDataset(Dataset):
             corr1 = np.delete(corr1, edge_idx, axis=0)
             corr2 = np.delete(corr2, edge_idx, axis=0)
 
-            corr1 = corr1 - min_bound
-            corr2 = corr2 - min_bound
-
         num_corr = corr1.shape[0]
 
         # Sample corresopndences
