@@ -14,6 +14,8 @@ from lib.exceptions import NoGradientError, EmptyTensorError
 
 matplotlib.use('Agg')
 
+torch.autograd.set_detect_anomaly(True)
+
 
 def loss_function(model,
                   batch,
@@ -119,11 +121,13 @@ def loss_function(model,
         kp1_to_fmap2_position_distance = torch.max(torch.abs(
             fmap_pos2.unsqueeze(2).float() - all_fmap_pos2.unsqueeze(1)),
                                                    dim=0)[0]
-        fmap2_is_inside_safe_radius = kp1_to_fmap2_position_distance <= safe_radius
+        fmap2_is_outside_safe_radius = kp1_to_fmap2_position_distance > safe_radius
         kp1_to_descriptors2_distance_matrix = torch.cdist(descriptors1.t(),
                                                           all_descriptors2.t(),
                                                           p=2)
-        kp1_to_descriptors2_distance_matrix[fmap2_is_inside_safe_radius] = 0
+        kp1_to_descriptors2_distance_matrix = torch.where(
+            fmap2_is_outside_safe_radius, kp1_to_descriptors2_distance_matrix,
+            fmap2_is_outside_safe_radius.float())
 
         # Not square Euclidean distance: ||descriptors1 - all_descriptors2||_2
         # kp1_to_descriptors2_distance_matrix shape: (#corr, #features)
@@ -133,11 +137,13 @@ def loss_function(model,
         kp2_to_fmap1_position_distance = torch.max(torch.abs(
             fmap_pos1.unsqueeze(2).float() - all_fmap_pos1.unsqueeze(1)),
                                                    dim=0)[0]
-        fmap1_is_inside_safe_radius = kp2_to_fmap1_position_distance <= safe_radius
+        fmap1_is_outside_safe_radius = kp2_to_fmap1_position_distance > safe_radius
         kp2_to_descriptors1_distance_matrix = torch.cdist(descriptors2.t(),
                                                           all_descriptors1.t(),
                                                           p=2)
-        kp2_to_descriptors1_distance_matrix[fmap1_is_inside_safe_radius] = 0
+        kp2_to_descriptors1_distance_matrix = torch.where(
+            fmap1_is_outside_safe_radius, kp2_to_descriptors1_distance_matrix,
+            fmap1_is_outside_safe_radius.float())
 
         # Distance matrix shape: (#corr, 2*#features)
         distance_matrix = torch.cat((kp1_to_descriptors2_distance_matrix,
@@ -147,9 +153,7 @@ def loss_function(model,
 
         # Weights shape: (#corr, 2*#features)
         negative_distance_weights = torch.softmax(-distance_matrix, dim=1)
-        print(
-            f'weights: shape = {negative_distance_weights.shape}, sum = {torch.sum(negative_distance_weights, dim=1)}'
-        )
+        print(f'weights: shape = {negative_distance_weights.shape}')
 
         negative_distance = torch.sum(torch.mul(distance_matrix,
                                                 negative_distance_weights),
