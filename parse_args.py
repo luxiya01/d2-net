@@ -79,6 +79,11 @@ def get_args():
         '--ignore_score_edges',
         action='store_true',
         help='set detection scores at the edge of the feature map to 0')
+    parser.add_argument(
+            '--num_channels',
+            type=int,
+            default=512,
+            help='number of channels for the final output features')
 
     parser.add_argument('--batch_size', type=int, default=1, help='batch size')
     parser.add_argument('--num_workers',

@@ -6,7 +6,10 @@ import torchvision.models as models
 
 
 class DenseFeatureExtractionModule(nn.Module):
-    def __init__(self, finetune_feature_extraction=False, use_cuda=True):
+    def __init__(self,
+                 finetune_feature_extraction=False,
+                 use_cuda=True,
+                 num_channels=512):
         super(DenseFeatureExtractionModule, self).__init__()
 
         model = models.vgg16()
@@ -20,18 +23,30 @@ class DenseFeatureExtractionModule(nn.Module):
         ]
         conv4_3_idx = vgg16_layers.index('conv4_3')
 
-        self.model = nn.Sequential(
-            *list(model.features.children())[:conv4_3_idx + 1])
+        model = list(model.features.children())[:conv4_3_idx + 1]
+        if num_channels != 512:
+            model.append(
+                nn.Conv2d(512,
+                          num_channels,
+                          kernel_size=1,
+                          stride=1,
+                          padding=0))
+        self.model = nn.Sequential(*model)
 
-        self.num_channels = 512
+        self.num_channels = num_channels
 
         # Fix forward parameters
         for param in self.model.parameters():
             param.requires_grad = False
         if finetune_feature_extraction:
             # Unlock conv4_3
-            for param in list(self.model.parameters())[-2:]:
-                param.requires_grad = True
+            if num_channels == 512:
+                for param in list(self.model.parameters())[-2:]:
+                    param.requires_grad = True
+            # Unlock conv4_3 and bottleneck
+            else:
+                for param in list(self.model.parameters())[-3:]:
+                    param.requires_grad = True
 
         if use_cuda:
             self.model = self.model.cuda()
@@ -87,21 +102,26 @@ class D2Net(nn.Module):
     def __init__(self,
                  model_file=None,
                  use_cuda=True,
-                 ignore_score_edges=False):
+                 ignore_score_edges=False,
+                 num_channels=512):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
-            finetune_feature_extraction=True, use_cuda=use_cuda)
+            finetune_feature_extraction=True,
+            use_cuda=use_cuda,
+            num_channels=num_channels)
 
         self.detection = SoftDetectionModule(
             ignore_score_edges=ignore_score_edges)
 
         if model_file is not None:
             if use_cuda:
-                self.load_state_dict(torch.load(model_file)['model'])
+                self.load_state_dict(torch.load(model_file)['model'],
+                                     strict=False)
             else:
-                self.load_state_dict(
-                    torch.load(model_file, map_location='cpu')['model'])
+                self.load_state_dict(torch.load(model_file,
+                                                map_location='cpu')['model'],
+                                     strict=False)
 
         self.ignore_score_edges = ignore_score_edges
 

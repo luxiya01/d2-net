@@ -44,7 +44,8 @@ writer = SummaryWriter(args.log_dir)
 # Creating CNN model
 model = D2Net(model_file=args.model_file,
               use_cuda=use_cuda,
-              ignore_score_edges=args.ignore_score_edges)
+              ignore_score_edges=args.ignore_score_edges,
+              num_channels=args.num_channels)
 
 # Optimizer
 optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
