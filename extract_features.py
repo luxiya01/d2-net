@@ -98,6 +98,12 @@ parser.add_argument(
     help='remove ReLU after the dense feature extraction module')
 parser.set_defaults(use_relu=True)
 
+parser.add_argument(
+        '--num_channels',
+        type=int,
+        default=512,
+        help='number of channels for the final output features')
+
 args = parser.parse_args()
 
 print(args)
@@ -106,11 +112,13 @@ print(args)
 model = D2Net(model_file=args.model_file,
               use_relu=args.use_relu,
               use_cuda=use_cuda,
-              ignore_score_edges=args.ignore_score_edges)
+              ignore_score_edges=args.ignore_score_edges,
+              num_channels=args.num_channels)
 soft_detection_model = D2NetSoftDetection(
     model_file=args.model_file,
     use_cuda=use_cuda,
-    ignore_score_edges=args.ignore_score_edges)
+    ignore_score_edges=args.ignore_score_edges,
+    num_channels=args.num_channels)
 
 # Tensorboard logging
 log_dir = os.path.join(args.feat_dir, 'logs')

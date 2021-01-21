@@ -4,10 +4,11 @@ import torch.nn.functional as F
 
 
 class DenseFeatureExtractionModule(nn.Module):
-    def __init__(self, use_relu=True, use_cuda=True, ignore_score_edges=False):
+    def __init__(self, use_relu=True, use_cuda=True, ignore_score_edges=False, num_channels=512):
         super(DenseFeatureExtractionModule, self).__init__()
+        self.num_channels = num_channels
 
-        self.model = nn.Sequential(
+        model = [
             nn.Conv2d(3, 64, 3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(64, 64, 3, padding=1),
@@ -30,8 +31,17 @@ class DenseFeatureExtractionModule(nn.Module):
             nn.Conv2d(512, 512, 3, padding=2, dilation=2),
             nn.ReLU(inplace=True),
             nn.Conv2d(512, 512, 3, padding=2, dilation=2),
-        )
-        self.num_channels = 512
+            ]
+
+        if num_channels != 512:
+            model.append(
+                nn.Conv2d(512,
+                          num_channels,
+                          kernel_size=1,
+                          stride=1,
+                          padding=0))
+
+        self.model = nn.Sequential(*model)
 
         self.use_relu = use_relu
 
@@ -56,11 +66,13 @@ class DenseFeatureExtractionModule(nn.Module):
 
 
 class D2Net(nn.Module):
-    def __init__(self, model_file=None, use_relu=True, use_cuda=True, ignore_score_edges=False):
+    def __init__(self, model_file=None, use_relu=True, use_cuda=True, ignore_score_edges=False,
+            num_channels=512):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
-            use_relu=use_relu, use_cuda=use_cuda, ignore_score_edges=ignore_score_edges)
+            use_relu=use_relu, use_cuda=use_cuda, ignore_score_edges=ignore_score_edges,
+            num_channels=num_channels)
 
         self.detection = HardDetectionModule()
 
