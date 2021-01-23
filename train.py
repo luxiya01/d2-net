@@ -42,8 +42,12 @@ print(args)
 writer = SummaryWriter(args.log_dir)
 
 # Creating CNN model
+finetune_feature_extraction = True
+if args.train_from_scratch:
+    finetune_feature_extraction = False
 model = D2Net(model_file=args.model_file,
               use_cuda=use_cuda,
+              finetune_feature_extraction=finetune_feature_extraction,
               ignore_score_edges=args.ignore_score_edges,
               num_channels=args.num_channels)
 

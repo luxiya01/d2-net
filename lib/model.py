@@ -7,7 +7,7 @@ import torchvision.models as models
 
 class DenseFeatureExtractionModule(nn.Module):
     def __init__(self,
-                 finetune_feature_extraction=False,
+                 finetune_feature_extraction,
                  use_cuda=True,
                  num_channels=512):
         super(DenseFeatureExtractionModule, self).__init__()
@@ -23,8 +23,10 @@ class DenseFeatureExtractionModule(nn.Module):
         ]
         conv4_3_idx = vgg16_layers.index('conv4_3')
 
-        model = list(model.features.children())[:conv4_3_idx + 1]
-        if num_channels != 512:
+        if num_channels == 512:
+            model = list(model.features.children())[:conv4_3_idx + 1]
+        else:
+            model = list(model.features.children())[:conv4_3_idx]
             model.append(
                 nn.Conv2d(512,
                           num_channels,
@@ -35,18 +37,18 @@ class DenseFeatureExtractionModule(nn.Module):
 
         self.num_channels = num_channels
 
-        # Fix forward parameters
-        for param in self.model.parameters():
-            param.requires_grad = False
         if finetune_feature_extraction:
-            # Unlock conv4_3
-            if num_channels == 512:
-                for param in list(self.model.parameters())[-2:]:
-                    param.requires_grad = True
-            # Unlock conv4_3 and bottleneck
-            else:
-                for param in list(self.model.parameters())[-3:]:
-                    param.requires_grad = True
+            # Fix forward parameters
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+            # Unlock conv4_3 or bottleneck
+            for param in list(self.model.parameters())[-2:]:
+                param.requires_grad = True
+        else:
+            # Train from scratch
+            for param in self.model.parameters():
+                param.requires_grad = True
 
         if use_cuda:
             self.model = self.model.cuda()
@@ -103,11 +105,12 @@ class D2Net(nn.Module):
                  model_file=None,
                  use_cuda=True,
                  ignore_score_edges=False,
-                 num_channels=512):
+                 num_channels=512,
+                 finetune_feature_extraction=True):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
-            finetune_feature_extraction=True,
+            finetune_feature_extraction=finetune_feature_extraction,
             use_cuda=use_cuda,
             num_channels=num_channels)
 

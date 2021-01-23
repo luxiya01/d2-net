@@ -46,6 +46,12 @@ def get_args():
                         type=str,
                         default=None,
                         help='path to the full model')
+    parser.add_argument(
+        '--train_from_scratch',
+        action='store_true',
+        help=
+        'if True, gradient flows through all CNN layers, else only the final layer is trained'
+    )
 
     parser.add_argument('--num_epochs',
                         type=int,
@@ -80,10 +86,10 @@ def get_args():
         action='store_true',
         help='set detection scores at the edge of the feature map to 0')
     parser.add_argument(
-            '--num_channels',
-            type=int,
-            default=512,
-            help='number of channels for the final output features')
+        '--num_channels',
+        type=int,
+        default=512,
+        help='number of channels for the final output features')
 
     parser.add_argument('--batch_size', type=int, default=1, help='batch size')
     parser.add_argument('--num_workers',
