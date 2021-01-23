@@ -108,56 +108,33 @@ def loss_function(model,
         descriptors2 = descriptors2[:, ids_pos2]
         scores2 = scores2[ids_pos2]
 
-        # Not squared Euclidean distance: ||descriptors1 - descriptors2||_2
+        # Squared Euclidean distance: ||descriptors1 - descriptors2||_2^2
         # positive_distance shape: (#corr, )
-        positive_distance = torch.diagonal(
-            torch.cdist(descriptors1.t(), descriptors2.t(), p=2))
+        positive_distance = 2 - 2 * (descriptors1.t().unsqueeze(
+            1) @ descriptors2.t().unsqueeze(2)).squeeze()
 
-        # Not square Euclidean distance: ||descriptors1 - all_descriptors2||_2
-        # kp1_to_descriptors2_distance_matrix shape: (#corr, #features)
-        # kp1_to_descriptors2_distance_matrix[i, j] = Euclidean distance between descriptor1[i]
-        #                                             and all_descriptors2[j]
         all_fmap_pos2 = grid_positions(h2, w2, device)
-        kp1_to_fmap2_position_distance = torch.max(torch.abs(
+        position_distance = torch.max(torch.abs(
             fmap_pos2.unsqueeze(2).float() - all_fmap_pos2.unsqueeze(1)),
-                                                   dim=0)[0]
-        fmap2_is_outside_safe_radius = kp1_to_fmap2_position_distance > safe_radius
-        kp1_to_descriptors2_distance_matrix = torch.cdist(descriptors1.t(),
-                                                          all_descriptors2.t(),
-                                                          p=2)
-        kp1_to_descriptors2_distance_matrix = torch.where(
-            fmap2_is_outside_safe_radius, kp1_to_descriptors2_distance_matrix,
-            fmap2_is_outside_safe_radius.float())
+                                      dim=0)[0]
+        is_out_of_safe_radius = position_distance > safe_radius
+        distance_matrix = 2 - 2 * (descriptors1.t() @ all_descriptors2)
+        negative_distance2 = torch.min(
+            distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
+            dim=1)[0]
 
-        # Not square Euclidean distance: ||descriptors1 - all_descriptors2||_2
-        # kp1_to_descriptors2_distance_matrix shape: (#corr, #features)
-        # kp1_to_descriptors2_distance_matrix[i, j] = Euclidean distance between descriptor1[i]
-        #                                             and all_descriptors2[j]
         all_fmap_pos1 = grid_positions(h1, w1, device)
-        kp2_to_fmap1_position_distance = torch.max(torch.abs(
+        position_distance = torch.max(torch.abs(
             fmap_pos1.unsqueeze(2).float() - all_fmap_pos1.unsqueeze(1)),
-                                                   dim=0)[0]
-        fmap1_is_outside_safe_radius = kp2_to_fmap1_position_distance > safe_radius
-        kp2_to_descriptors1_distance_matrix = torch.cdist(descriptors2.t(),
-                                                          all_descriptors1.t(),
-                                                          p=2)
-        kp2_to_descriptors1_distance_matrix = torch.where(
-            fmap1_is_outside_safe_radius, kp2_to_descriptors1_distance_matrix,
-            fmap1_is_outside_safe_radius.float())
-
-        # Distance matrix shape: (#corr, 2*#features)
-        distance_matrix = torch.cat((kp1_to_descriptors2_distance_matrix,
-                                     kp2_to_descriptors1_distance_matrix),
-                                    dim=1)
-        print(f'distance_matrix shape: {distance_matrix.shape}')
-
-        # Weights shape: (#corr, 2*#features)
-        negative_distance_weights = torch.softmax(-distance_matrix, dim=1)
-        print(f'weights: shape = {negative_distance_weights.shape}')
-
-        negative_distance = torch.sum(torch.mul(distance_matrix,
-                                                negative_distance_weights),
-                                      dim=1)
+                                      dim=0)[0]
+        is_out_of_safe_radius = position_distance > safe_radius
+        distance_matrix = 2 - 2 * (descriptors2.t() @ all_descriptors1)
+        negative_distance1 = torch.min(
+            distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
+            dim=1)[0]
+        negative_distance = torch.min(negative_distance1, negative_distance2)
+        diff = positive_distance - torch.min(negative_distance1,
+                                             negative_distance2)
 
         diff = positive_distance - negative_distance
 
