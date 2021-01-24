@@ -61,12 +61,10 @@ scheduler = optim.lr_scheduler.StepLR(optimizer,
                                       verbose=True)
 
 # Dataset
-mean, std = image_net_mean_std()
 data_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.GaussianBlur(kernel_size=5),
-    transforms.ColorJitter(brightness=.2, contrast=.2, saturation=.2),
-    transforms.Normalize(mean=mean, std=std)
+    transforms.ColorJitter(brightness=.2)
 ])
 
 
@@ -139,8 +137,6 @@ def process_epoch(epoch_idx,
         batch['batch_size'] = args.batch_size
         batch['log_interval'] = args.log_interval
         batch['global_step'] = epoch_idx * len(dataloader) + batch_idx
-        batch['mean'] = mean
-        batch['std'] = std
 
         batch['log_img'] = False
         patch_indices = (batch['idx1'][0], batch['idx2'][0])

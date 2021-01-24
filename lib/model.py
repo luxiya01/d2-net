@@ -33,6 +33,8 @@ class DenseFeatureExtractionModule(nn.Module):
                           kernel_size=1,
                           stride=1,
                           padding=0))
+        # Take grayscale images instead of RGB
+        model[0] = nn.Conv2d(1, 64, 3, padding=1)
         self.model = nn.Sequential(*model)
 
         self.num_channels = num_channels

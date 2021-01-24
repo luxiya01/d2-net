@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 
 from lib.utils import (grid_positions, upscale_positions, downscale_positions,
-                       savefig, show_tensor_image)
+                       savefig, show_tensor_image, show_grayscale_tensor_image)
 from lib.exceptions import NoGradientError, EmptyTensorError
 
 matplotlib.use('Agg')
@@ -149,11 +149,9 @@ def loss_function(model,
         distance_matrix = torch.cat((kp1_to_descriptors2_distance_matrix,
                                      kp2_to_descriptors1_distance_matrix),
                                     dim=1)
-        print(f'distance_matrix shape: {distance_matrix.shape}')
 
         # Weights shape: (#corr, 2*#features)
         negative_distance_weights = torch.softmax(-distance_matrix, dim=1)
-        print(f'weights: shape = {negative_distance_weights.shape}')
 
         negative_distance = torch.sum(torch.mul(distance_matrix,
                                                 negative_distance_weights),
@@ -272,15 +270,13 @@ def plot_intermediate_results(pos1,
     fig = plt.figure(figsize=(10, 5), constrained_layout=True)
     gs = fig.add_gridspec(2, 4)
     ax_img1 = fig.add_subplot(gs[0, 0])
-    img1 = show_tensor_image(batch['image1'][idx_in_batch], batch['mean'],
-                             batch['std'])
+    img1 = show_grayscale_tensor_image(batch['image1'][0])
     ax_img1.imshow(img1)
     ax_img1.set_title(f'Image1: {idx1}')
     ax_img1.axis('off')
 
     ax_img2 = fig.add_subplot(gs[0, 1])
-    img2 = show_tensor_image(batch['image2'][idx_in_batch], batch['mean'],
-                             batch['std'])
+    img2 = show_grayscale_tensor_image(batch['image2'][0])
     ax_img2.imshow(img2)
     ax_img2.set_title(f'Image2: {idx2}')
     ax_img2.axis('off')
@@ -389,8 +385,7 @@ def plot_network_res(pos1, pos2, batch, idx_in_batch, output):
     n_sp = 4
     plt.figure()
     plt.subplot(1, n_sp, 1)
-    im1 = show_tensor_image(batch['image1'][idx_in_batch], batch['mean'],
-                            batch['std'])
+    im1 = batch['image1']
     plt.imshow(im1)
 
     plt.scatter(pos1_aux[1, :],
@@ -404,8 +399,7 @@ def plot_network_res(pos1, pos2, batch, idx_in_batch, output):
     plt.imshow(output['scores1'][idx_in_batch].data.cpu().numpy(), cmap='Reds')
     plt.axis('off')
     plt.subplot(1, n_sp, 3)
-    im2 = show_tensor_image(batch['image2'][idx_in_batch], batch['mean'],
-                            batch['std'])
+    im2 = batch['image2']
     plt.imshow(im2)
     plt.scatter(pos2_aux[1, :],
                 pos2_aux[0, :],

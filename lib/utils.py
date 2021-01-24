@@ -12,6 +12,10 @@ def image_net_mean_std():
     std = np.array([0.229, 0.224, 0.225])
     return mean, std
 
+def show_grayscale_tensor_image(image):
+    image = image.cpu().permute(1, 2, 0).numpy()
+    return np.round(image * 255).astype(np.uint8)
+
 
 def show_tensor_image(image, mean, std):
     image = image.cpu() * std.reshape([3, 1, 1]) + mean.reshape([3, 1, 1])

@@ -64,12 +64,12 @@ class SSSDataset(Dataset):
 
     def _load_image(self, idx):
         """Given a patch index, load the correponding img_type (norm_intensity or
-        unnorm_intensity), convert from grayscale to rgb if not one_channel.
+        unnorm_intensity), keep image in grayscale.
         Keep range in (0, 1)"""
         patch_name = '.'.join([str(idx), 'png'])
 
         image = Image.open(os.path.join(self.image_dir,
-                                        patch_name)).convert('RGB')
+                                        patch_name)).convert('L')
         return np.array(image)
 
     def __len__(self):
