@@ -98,11 +98,10 @@ parser.add_argument(
     help='remove ReLU after the dense feature extraction module')
 parser.set_defaults(use_relu=True)
 
-parser.add_argument(
-        '--num_channels',
-        type=int,
-        default=512,
-        help='number of channels for the final output features')
+parser.add_argument('--num_channels',
+                    type=int,
+                    default=512,
+                    help='number of channels for the final output features')
 
 args = parser.parse_args()
 
@@ -139,7 +138,6 @@ data_transform = transforms.Compose(
 
 for i, filename in tqdm(enumerate(files), total=len(files)):
     idx = (os.path.basename(os.path.normpath(filename))).split('.')[0]
-    print(f'>> Generating features for path = {filename}, idx={idx}')
     image = Image.open(filename).convert('RGB')
     image = np.array(image)
 
@@ -157,7 +155,6 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     fact_i = image.shape[0] / resized_image.shape[0]
     fact_j = image.shape[1] / resized_image.shape[1]
     input_image = data_transform(resized_image).unsqueeze(0).to(device).float()
-    print(f'input_image range: {input_image.min()}, {input_image.max()}')
 
     with torch.no_grad():
         # Hard detection
