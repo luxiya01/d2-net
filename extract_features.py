@@ -19,7 +19,7 @@ from PIL import Image
 
 from lib.model import D2Net as D2NetSoftDetection
 from lib.model_test import D2Net
-from lib.utils import image_net_mean_std, show_tensor_image
+from lib.utils import show_grayscale_tensor_image
 from lib.pyramid import process_multiscale
 
 # CUDA
@@ -98,11 +98,10 @@ parser.add_argument(
     help='remove ReLU after the dense feature extraction module')
 parser.set_defaults(use_relu=True)
 
-parser.add_argument(
-        '--num_channels',
-        type=int,
-        default=512,
-        help='number of channels for the final output features')
+parser.add_argument('--num_channels',
+                    type=int,
+                    default=512,
+                    help='number of channels for the final output features')
 
 args = parser.parse_args()
 
@@ -132,15 +131,12 @@ else:
 image_dir = os.path.join(args.data_dir, os.path.join('images', args.img_type))
 files = [os.path.join(image_dir, x) for x in os.listdir(image_dir)]
 
-mean, std = image_net_mean_std()
-data_transform = transforms.Compose(
-    [transforms.ToTensor(),
-     transforms.Normalize(mean=mean, std=std)])
+data_transform = transforms.Compose([transforms.ToTensor()])
 
 for i, filename in tqdm(enumerate(files), total=len(files)):
     idx = (os.path.basename(os.path.normpath(filename))).split('.')[0]
     print(f'>> Generating features for path = {filename}, idx={idx}')
-    image = Image.open(filename).convert('RGB')
+    image = Image.open(filename).convert('L')
     image = np.array(image)
 
     # TODO: switch to PIL.Image due to deprecation of scipy.misc.imresize.
@@ -208,13 +204,13 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
     fig = plt.figure(figsize=(10, 5), constrained_layout=True)
     gs = fig.add_gridspec(1, 3)
     ax_orig_img = fig.add_subplot(gs[0, 0])
-    ax_orig_img.imshow(resized_image, cmap='Greys')
+    ax_orig_img.imshow(resized_image)
     ax_orig_img.set_title(f'Original: {idx}')
     ax_orig_img.axis('off')
 
     ax_preprocessed_img = fig.add_subplot(gs[0, 1])
-    preprocessed_img = show_tensor_image(input_image.squeeze(0), mean, std)
-    ax_preprocessed_img.imshow(preprocessed_img, cmap='Greys')
+    preprocessed_img = show_grayscale_tensor_image(input_image.squeeze(0))
+    ax_preprocessed_img.imshow(preprocessed_img)
     ax_preprocessed_img.scatter(x=[kp[0] for kp in keypoints],
                                 y=[kp[1] for kp in keypoints],
                                 s=1,
