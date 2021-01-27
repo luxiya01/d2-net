@@ -4,7 +4,11 @@ import torch.nn.functional as F
 
 
 class DenseFeatureExtractionModule(nn.Module):
-    def __init__(self, use_relu=True, use_cuda=True, ignore_score_edges=False, num_channels=512):
+    def __init__(self,
+                 use_relu=True,
+                 use_cuda=True,
+                 ignore_score_edges=False,
+                 num_channels=512):
         super(DenseFeatureExtractionModule, self).__init__()
         self.num_channels = num_channels
 
@@ -30,16 +34,8 @@ class DenseFeatureExtractionModule(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(512, 512, 3, padding=2, dilation=2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(512, 512, 3, padding=2, dilation=2),
-            ]
-
-        if num_channels != 512:
-            model.append(
-                nn.Conv2d(512,
-                          num_channels,
-                          kernel_size=1,
-                          stride=1,
-                          padding=0))
+            nn.Conv2d(512, num_channels, 1, padding=0, dilation=2),
+        ]
 
         self.model = nn.Sequential(*model)
 
@@ -52,7 +48,6 @@ class DenseFeatureExtractionModule(nn.Module):
 
     def forward(self, batch):
         output = self.model(batch)
-        print(f'output shape: {output.shape}')
         if self.use_relu:
             output = F.relu(output)
 
@@ -66,12 +61,18 @@ class DenseFeatureExtractionModule(nn.Module):
 
 
 class D2Net(nn.Module):
-    def __init__(self, model_file=None, use_relu=True, use_cuda=True, ignore_score_edges=False,
-            num_channels=512):
+    def __init__(self,
+                 model_file=None,
+                 use_relu=True,
+                 use_cuda=True,
+                 ignore_score_edges=False,
+                 num_channels=512):
         super(D2Net, self).__init__()
 
         self.dense_feature_extraction = DenseFeatureExtractionModule(
-            use_relu=use_relu, use_cuda=use_cuda, ignore_score_edges=ignore_score_edges,
+            use_relu=use_relu,
+            use_cuda=use_cuda,
+            ignore_score_edges=ignore_score_edges,
             num_channels=num_channels)
 
         self.detection = HardDetectionModule()
