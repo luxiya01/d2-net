@@ -56,9 +56,13 @@ optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                        lr=args.lr)
 # Learning rate scheduler
 scheduler = optim.lr_scheduler.StepLR(optimizer,
-                                      step_size=2,
+                                      step_size=5,
                                       gamma=.5,
                                       verbose=True)
+#scheduler = optim.lr_scheduler.StepLR(optimizer,
+#                                      step_size=2,
+#                                      gamma=.5,
+#                                      verbose=True)
 
 # Dataset
 mean, std = image_net_mean_std()
@@ -141,6 +145,7 @@ def process_epoch(epoch_idx,
         batch['global_step'] = epoch_idx * len(dataloader) + batch_idx
         batch['mean'] = mean
         batch['std'] = std
+        batch['log'] = batch_idx % args.log_interval
 
         batch['log_img'] = False
         patch_indices = (batch['idx1'][0], batch['idx2'][0])
@@ -163,7 +168,7 @@ def process_epoch(epoch_idx,
 
         progress_bar.set_postfix(loss=('%.10f' % np.mean(epoch_losses)))
 
-        if batch_idx % args.log_interval == 0:
+        if batch['log'] == 0:
             log_file.write('[%s] epoch %d - batch %d / %d - avg_loss: %f\n' %
                            ('train' if train else 'valid', epoch_idx,
                             batch_idx, len(dataloader), np.mean(epoch_losses)))
