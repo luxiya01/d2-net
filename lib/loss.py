@@ -56,36 +56,6 @@ def loss_function(model,
         all_descriptors2 = F.normalize(unnorm_all_descriptors2, dim=0)
         descriptors2 = all_descriptors2
 
-        # Log: unnormalised descriptor L2-norm
-        unnorm_all_descriptors_1and2 = torch.stack(
-            [unnorm_all_descriptors1, unnorm_all_descriptors2])
-        descriptor_norm = torch.linalg.norm(unnorm_all_descriptors_1and2,
-                                            dim=0)
-        descriptor_norm_quantiles = torch.quantile(descriptor_norm, quantiles)
-        writer.add_scalars('L2-norm of [%s] embeddings' %
-                           ('train' if batch['train'] else 'valid'), {
-                               '0%-ile': descriptor_norm_quantiles[0],
-                               '5%-ile': descriptor_norm_quantiles[1],
-                               '50%-ile': descriptor_norm_quantiles[2],
-                               '95%-ile': descriptor_norm_quantiles[3],
-                               '100%-ile': descriptor_norm_quantiles[4]
-                           },
-                           global_step=batch['global_step'])
-
-        # Log: unnormalised descriptor entries
-        descriptor_entries = unnorm_all_descriptors_1and2.view(-1, )
-        descriptor_entries_quantiles = torch.quantile(descriptor_entries,
-                                                      quantiles)
-        writer.add_scalars('Descriptor entries of [%s] embeddings' %
-                           ('train' if batch['train'] else 'valid'), {
-                               '0%-ile': descriptor_entries_quantiles[0],
-                               '5%-ile': descriptor_entries_quantiles[1],
-                               '50%-ile': descriptor_entries_quantiles[2],
-                               '95%-ile': descriptor_entries_quantiles[3],
-                               '100%-ile': descriptor_entries_quantiles[4]
-                           },
-                           global_step=batch['global_step'])
-
         # Sample GT correspondences (assume already in numpy convention)
         corr1 = batch['corr1'][idx_in_batch].to(device)  # [num_corr, 2]
         corr2 = batch['corr2'][idx_in_batch].to(device)  # [num_corr, 2]
@@ -161,52 +131,87 @@ def loss_function(model,
 
         diff = positive_distance - negative_distance
 
-        # Log: number of active triplets (violate margin constraint)
-        num_active_triplets = torch.count_nonzero(diff > -margin)
-        writer.add_scalar('Number of [%s] active triplets' %
-                          ('train' if batch['train'] else 'valid'),
-                          num_active_triplets,
-                          global_step=batch['global_step'])
-
-        # Log: positive distance
-        positive_dist_quantiles = torch.quantile(positive_distance, quantiles)
-        writer.add_scalars('positive distance [%s] batch' %
-                           ('train' if batch['train'] else 'valid'), {
-                               '0%-ile': positive_dist_quantiles[0],
-                               '5%-ile': positive_dist_quantiles[1],
-                               '50%-ile': positive_dist_quantiles[2],
-                               '95%-ile': positive_dist_quantiles[3],
-                               '100%-ile': positive_dist_quantiles[4]
-                           },
-                           global_step=batch['global_step'])
-        # Log: negative distance
-        negative_dist_quantiles = torch.quantile(negative_distance, quantiles)
-        writer.add_scalars('negative distance [%s] batch' %
-                           ('train' if batch['train'] else 'valid'), {
-                               '0%-ile': negative_dist_quantiles[0],
-                               '5%-ile': negative_dist_quantiles[1],
-                               '50%-ile': negative_dist_quantiles[2],
-                               '95%-ile': negative_dist_quantiles[3],
-                               '100%-ile': negative_dist_quantiles[4]
-                           },
-                           global_step=batch['global_step'])
-        # Log: distance between pairs
-        dist_quantiles = torch.quantile(diff, quantiles)
-        writer.add_scalars('positive distance - negative distance [%s] batch' %
-                           ('train' if batch['train'] else 'valid'), {
-                               '0%-ile': dist_quantiles[0],
-                               '5%-ile': dist_quantiles[1],
-                               '50%-ile': dist_quantiles[2],
-                               '95%-ile': dist_quantiles[3],
-                               '100%-ile': dist_quantiles[4]
-                           },
-                           global_step=batch['global_step'])
-
         loss = loss + (torch.sum(scores1 * scores2 * F.relu(margin + diff)) /
                        (torch.sum(scores1 * scores2) + 1e-7))
 
         has_grad = True
         n_valid_samples += 1
+
+        if batch['log'] == 0:
+            # Log: unnormalised descriptor L2-norm
+            unnorm_all_descriptors_1and2 = torch.stack(
+                [unnorm_all_descriptors1, unnorm_all_descriptors2])
+            descriptor_norm = torch.linalg.norm(unnorm_all_descriptors_1and2,
+                                                dim=0)
+            descriptor_norm_quantiles = torch.quantile(descriptor_norm,
+                                                       quantiles)
+            writer.add_scalars('L2-norm of [%s] embeddings' %
+                               ('train' if batch['train'] else 'valid'), {
+                                   '0%-ile': descriptor_norm_quantiles[0],
+                                   '5%-ile': descriptor_norm_quantiles[1],
+                                   '50%-ile': descriptor_norm_quantiles[2],
+                                   '95%-ile': descriptor_norm_quantiles[3],
+                                   '100%-ile': descriptor_norm_quantiles[4]
+                               },
+                               global_step=batch['global_step'])
+
+            # Log: unnormalised descriptor entries
+            descriptor_entries = unnorm_all_descriptors_1and2.view(-1, )
+            descriptor_entries_quantiles = torch.quantile(
+                descriptor_entries, quantiles)
+            writer.add_scalars('Descriptor entries of [%s] embeddings' %
+                               ('train' if batch['train'] else 'valid'), {
+                                   '0%-ile': descriptor_entries_quantiles[0],
+                                   '5%-ile': descriptor_entries_quantiles[1],
+                                   '50%-ile': descriptor_entries_quantiles[2],
+                                   '95%-ile': descriptor_entries_quantiles[3],
+                                   '100%-ile': descriptor_entries_quantiles[4]
+                               },
+                               global_step=batch['global_step'])
+
+            # Log: number of active triplets (violate margin constraint)
+            num_active_triplets = torch.count_nonzero(diff > -margin)
+            writer.add_scalar('Number of [%s] active triplets' %
+                              ('train' if batch['train'] else 'valid'),
+                              num_active_triplets,
+                              global_step=batch['global_step'])
+
+            # Log: positive distance
+            positive_dist_quantiles = torch.quantile(positive_distance,
+                                                     quantiles)
+            writer.add_scalars('positive distance [%s] batch' %
+                               ('train' if batch['train'] else 'valid'), {
+                                   '0%-ile': positive_dist_quantiles[0],
+                                   '5%-ile': positive_dist_quantiles[1],
+                                   '50%-ile': positive_dist_quantiles[2],
+                                   '95%-ile': positive_dist_quantiles[3],
+                                   '100%-ile': positive_dist_quantiles[4]
+                               },
+                               global_step=batch['global_step'])
+            # Log: negative distance
+            negative_dist_quantiles = torch.quantile(negative_distance,
+                                                     quantiles)
+            writer.add_scalars('negative distance [%s] batch' %
+                               ('train' if batch['train'] else 'valid'), {
+                                   '0%-ile': negative_dist_quantiles[0],
+                                   '5%-ile': negative_dist_quantiles[1],
+                                   '50%-ile': negative_dist_quantiles[2],
+                                   '95%-ile': negative_dist_quantiles[3],
+                                   '100%-ile': negative_dist_quantiles[4]
+                               },
+                               global_step=batch['global_step'])
+            # Log: distance between pairs
+            dist_quantiles = torch.quantile(diff, quantiles)
+            writer.add_scalars(
+                'positive distance - negative distance [%s] batch' %
+                ('train' if batch['train'] else 'valid'), {
+                    '0%-ile': dist_quantiles[0],
+                    '5%-ile': dist_quantiles[1],
+                    '50%-ile': dist_quantiles[2],
+                    '95%-ile': dist_quantiles[3],
+                    '100%-ile': dist_quantiles[4]
+                },
+                global_step=batch['global_step'])
 
         if batch['log_img']:
             # log image to tensorboard
