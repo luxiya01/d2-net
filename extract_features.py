@@ -136,6 +136,7 @@ data_transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Normalize(mean=mean, std=std)])
 
+fig = plt.figure(figsize=(10, 5), constrained_layout=True)
 for i, filename in tqdm(enumerate(files), total=len(files)):
     idx = (os.path.basename(os.path.normpath(filename))).split('.')[0]
     image = Image.open(filename).convert('RGB')
@@ -202,7 +203,6 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
 
     # Tensorboard logging
 
-    fig = plt.figure(figsize=(10, 5), constrained_layout=True)
     gs = fig.add_gridspec(1, 3)
     ax_orig_img = fig.add_subplot(gs[0, 0])
     ax_orig_img.imshow(resized_image, cmap='Greys')
@@ -228,7 +228,16 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
         soft_detection_scores[:, :2] = soft_detection_scores_mean
         soft_detection_scores[:, -2:] = soft_detection_scores_mean
 
-    ax_soft_detection.imshow(soft_detection_scores, cmap='Reds')
+    ax_soft_detection.imshow(np.repeat(np.repeat(soft_detection_scores,
+                                                 8,
+                                                 axis=0),
+                                       8,
+                                       axis=1),
+                             cmap='Reds')
+    ax_soft_detection.scatter(x=[kp[0] for kp in keypoints],
+                              y=[kp[1] for kp in keypoints],
+                              s=2,
+                              c='k')
     ax_soft_detection.set_title(f'Soft detection score: {idx}')
     ax_soft_detection.axis('off')
     if args.store_separate_pngs:
@@ -236,3 +245,4 @@ for i, filename in tqdm(enumerate(files), total=len(files)):
         plt.savefig(os.path.join(log_dir, f'{idx}.png'))
     else:  # store to tensorboard
         writer.add_figure(f'model_{args.model_file}', fig, global_step=i)
+    plt.clf()
