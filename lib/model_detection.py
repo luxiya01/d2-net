@@ -75,8 +75,6 @@ class SoftDetectionModule(nn.Module):
 
         self.pad = self.soft_local_max_size // 2
 
-        self.ignore_score_edges = ignore_score_edges
-
     def forward(self, batch):
         b = batch.size(0)
 
